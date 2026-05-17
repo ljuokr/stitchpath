@@ -847,10 +847,11 @@
       transition: transform 0.22s ease;
       box-shadow: 4px 0 16px rgba(0,0,0,0.18);
       padding-top: 14px;
+      flex: 0 0 auto;
     }
     body.sidebar-open #sidebar { transform: translateX(0); }
-    /* Canvas-Bereich nimmt volle Breite */
-    #main { display: block; height: 100%; }
+    /* #main bleibt flex, aber die Sidebar ist per position:fixed aus
+       dem Flow → der Canvas-Bereich bekommt die volle Breite. */
     /* Topbar-Hoop-Picker kompakter */
     .topactions { gap: 6px; }
     .hp-label { display: none; }
@@ -5068,6 +5069,12 @@ window.addEventListener("DOMContentLoaded", () => {
   SP.PointerInput.attach(document.getElementById("liveCanvas"));
   SP.UIShell.init();
   SP.Renderer.invalidate("all");
+  // Auf Mobile/Tablet ist die Layout-Computation manchmal verzögert.
+  // Zweimal nach kurzer Pause neu vermessen, damit der Canvas sicher
+  // die korrekte Grösse bekommt, auch wenn der Viewport spät steht.
+  setTimeout(() => SP.Renderer.resize(), 50);
+  setTimeout(() => SP.Renderer.resize(), 300);
+  window.addEventListener("load", () => SP.Renderer.resize());
 });
 </script>
 </body>
