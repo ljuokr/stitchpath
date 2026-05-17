@@ -890,6 +890,18 @@
     #infoPopup { left: 12px; right: 12px; min-width: 0; max-width: none; }
   }
 
+  /* ---------- Hoop-Picker: kompakter Anzeigewert auf Mobile ---------- */
+  .hp-select-wrap { position: relative; display: inline-block; }
+  .hp-short {
+    display: none;
+    position: absolute; left: 10px; right: 26px; top: 0; bottom: 0;
+    align-items: center;
+    pointer-events: none;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   /* ---------- Schmales Phone (≤ 640 px) ---------- */
   @media (max-width: 640px) {
     .brand h1 { display: none; }
@@ -899,6 +911,16 @@
     #moveBanner, #clickBanner, #eraseBanner, #moveStitchBanner {
       font-size: 13px; padding: 8px 14px;
     }
+    /* Hoop-Dropdown: nur Grösse anzeigen, Maschinenname bleibt im
+       aufgeklappten Menü. Wir verstecken den Select-Text per text-indent
+       und legen unsere kurze Anzeige darüber. Die native Dropdown-Liste
+       zeigt weiterhin die volle Bezeichnung. */
+    #hoopPreset {
+      text-indent: -9999px;
+      width: 116px;
+      max-width: 140px;
+    }
+    .hp-short { display: flex; }
   }
 
   /* ---------- Empty hint over canvas ---------- */
@@ -949,7 +971,10 @@
   <div class="topactions">
     <div class="hoop-picker">
       <span class="hp-label">Rahmen</span>
-      <select id="hoopPreset"></select>
+      <div class="hp-select-wrap">
+        <select id="hoopPreset"></select>
+        <span class="hp-short" id="hoopPresetShort" aria-hidden="true"></span>
+      </div>
       <span id="hoopCustom" class="hp-custom" style="display:none">
         <input type="number" id="hoopW" value="130">
         <span class="hp-x">×</span>
@@ -1239,7 +1264,7 @@
   <div class="info-line"><span class="info-label">Quellcode</span> <a href="https://github.com/ljuokr/stitchpath" target="_blank" rel="noopener">github.com/ljuokr/stitchpath</a></div>
   <div class="info-foot">
     <strong>Funktioniert offline.</strong> StitchPath ist eine einzige HTML-Datei und läuft ohne Server vollständig im Browser.
-    <a href="https://github.com/ljuokr/stitchpath/raw/main/StitchPath.html" download="StitchPath.html">Datei herunterladen</a>
+    <a id="btnDownloadHtml" href="#" download="StitchPath.html">Datei herunterladen</a>
     und lokal öffnen — auch unterwegs ohne Internet einsetzbar.
     <br><br>
     Frei nutzbar für private, schulische und nicht-kommerzielle Zwecke. Kommerzielle Nutzung nur mit schriftlicher Genehmigung des Autors. Experimentell — keine Gewähr für fehlerfreie Stickdateien.
@@ -4508,8 +4533,27 @@ SP.UIShell = (() => {
         const opt = document.createElement("option");
         opt.value = p.id;
         opt.textContent = p.name;
+        // dataset.short = "WxH mm" für die kompakte Mobile-Anzeige
+        if (p.wMm && p.hMm) {
+          opt.dataset.short = p.wMm + " × " + p.hMm + " mm";
+        } else {
+          opt.dataset.short = "Eigene";
+        }
         presetSelect.appendChild(opt);
       });
+      // Aktualisiert die kurze (mobile) Anzeige neben dem Hoop-Dropdown.
+      function refreshHoopShort() {
+        const shortEl = $("hoopPresetShort");
+        if (!shortEl) return;
+        const opt = presetSelect.options[presetSelect.selectedIndex];
+        if (!opt) { shortEl.textContent = ""; return; }
+        if (opt.value === "custom") {
+          const sz = SP.Hoop.getSize();
+          shortEl.textContent = sz.wMm + " × " + sz.hMm + " mm";
+        } else {
+          shortEl.textContent = opt.dataset.short || "";
+        }
+      }
       function findPresetForCurrent() {
         const { wMm, hMm } = SP.Hoop.getSize();
         const r = SP.Hoop.getCornerRadiusMm();
@@ -4547,8 +4591,11 @@ SP.UIShell = (() => {
         SP.Renderer.resize();
         updateStatus();
         SP.Persistence.autoSave();
+        refreshHoopShort();
       }
       presetSelect.addEventListener("change", () => applyHoopPreset(presetSelect.value));
+      // Initial-Sync der kurzen Anzeige
+      refreshHoopShort();
 
       // Mobile/Tablet-Sidebar-Toggle
       const btnMenu = $("btnMenu");
@@ -4597,6 +4644,36 @@ SP.UIShell = (() => {
         setTimeout(() => SP.Renderer.resize(), 250);
       });
 
+      // HTML-Datei herunterladen: holt die aktuelle Seite via fetch und
+      // bietet sie als Blob-Download an. Funktioniert sowohl auf der
+      // GitHub-Pages-Demo (same-origin → fetch erfolgreich) als auch
+      // wenn die Datei bereits lokal läuft (file:// → fetch der eigenen
+      // URL klappt in Chrome/Firefox; im Notfall Fallback auf direkten Link).
+      const dlBtn = $("btnDownloadHtml");
+      if (dlBtn) {
+        dlBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          try {
+            const res = await fetch(window.location.href);
+            const txt = await res.text();
+            const blob = new Blob([txt], { type: "text/html;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "StitchPath.html";
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }, 100);
+          } catch (err) {
+            // Fallback: direkt zur Raw-Datei auf GitHub navigieren
+            window.location.href = "https://github.com/ljuokr/stitchpath/raw/main/StitchPath.html";
+          }
+        });
+      }
+
       // Info-Popup: Toggle bei Klick auf "i", schliessen via × oder Klick ausserhalb
       const infoBtn = $("infoBtn");
       const infoPopup = $("infoPopup");
@@ -4636,6 +4713,7 @@ SP.UIShell = (() => {
         SP.Renderer.resize();
         updateStatus();
         SP.Persistence.autoSave();
+        refreshHoopShort();
       };
       $("hoopW").addEventListener("change", onCustomHoop);
       $("hoopH").addEventListener("change", onCustomHoop);
@@ -5025,6 +5103,7 @@ SP.UIShell = (() => {
       const currentPresetId = findPresetForCurrent();
       presetSelect.value = currentPresetId;
       $("hoopCustom").style.display = (currentPresetId === "custom") ? "" : "none";
+      refreshHoopShort();
       $("hoopW").value = SP.Hoop.getSize().wMm;
       $("hoopH").value = SP.Hoop.getSize().hMm;
       $("distMm").value = SP.PointerInput.getMinDistanceMm();
