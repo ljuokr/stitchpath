@@ -1,0 +1,4896 @@
+<!--
+  StitchPath — Browser-basierter Stickdaten-Editor (DST)
+  © 2026 Lukas Jordi
+
+  Lizenz: CC BY-NC 4.0
+  https://creativecommons.org/licenses/by-nc/4.0/
+
+  Frei nutzbar für private, schulische und nicht-kommerzielle Zwecke.
+  Kommerzielle Nutzung durch Dritte ist ohne schriftliche Genehmigung
+  des Autors nicht gestattet.
+
+  Diese App ist experimentell. Keine Gewähr, dass die exportierten
+  Stickdateien fehlerfrei auf einer Stickmaschine laufen.
+-->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>StitchPath</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<style>
+  :root {
+    --bg: #f4efe6;
+    --panel: #fbf8f2;
+    --panel-2: #ffffff;
+    --ink: #2a2620;
+    --ink-soft: #574e42;
+    --ink-faint: #847a6d;
+    --line: #e0d8c9;
+    --line-soft: #efe9dd;
+    --accent: #3a6d6e;
+    --accent-soft: #d6e4e4;
+    --accent-deep: #265052;
+    --warm: #a86345;
+    --warm-soft: #f1ddd0;
+    --warm-deep: #864e35;
+    --danger: #9a3f33;
+    --canvas-bg: #d8cfbf;
+    --hoop-bg: #fbf8f2;
+    --shadow-sm: 0 1px 2px rgba(60, 50, 40, .05);
+    --shadow: 0 1px 2px rgba(60, 50, 40, .04), 0 6px 18px rgba(60, 50, 40, .06);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 "Helvetica Neue", sans-serif;
+    font-size: 14px; color: var(--ink);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    user-select: none; -webkit-user-select: none;
+  }
+  body { display: flex; flex-direction: column; background: var(--bg); }
+
+  /* ---------- Top bar ---------- */
+  #topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 9px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .logo {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--accent); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 600;
+    box-shadow: 0 2px 5px rgba(79, 138, 139, .3);
+  }
+  .brand h1 {
+    font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.01em;
+  }
+  .brand .tag {
+    font-size: 12px; color: var(--ink-soft); margin-top: 1px;
+  }
+  .brand .stack { display: flex; flex-direction: column; line-height: 1.1; }
+  .topactions {
+    margin-left: auto;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .warn-note {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px;
+    color: var(--warm-deep);
+    cursor: help;
+    white-space: nowrap;
+  }
+  .warn-note svg { display: block; }
+
+  /* ---------- Info-Button (fixed, unten links) & Popup ---------- */
+  #infoBtn {
+    position: fixed;
+    bottom: 10px; left: 10px;
+    width: 28px; height: 28px;
+    min-height: 0; min-width: 0;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 1.5px solid var(--line);
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 700;
+    font-style: italic;
+    font-family: Georgia, serif;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+    padding: 0;
+    z-index: 150;
+    box-shadow: 0 1px 3px rgba(60, 40, 20, 0.08);
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  #infoBtn:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--accent-soft); }
+  #infoPopup {
+    position: fixed;
+    bottom: 44px; left: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(60, 40, 20, 0.18);
+    padding: 16px 20px;
+    font-size: 12.5px;
+    color: var(--ink);
+    line-height: 1.6;
+    z-index: 200;
+    min-width: 280px;
+    max-width: 360px;
+  }
+  #infoPopup .info-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+  #infoPopup .info-sub { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 10px; }
+  #infoPopup .info-line { display: flex; gap: 8px; align-items: baseline; }
+  #infoPopup .info-label { color: var(--ink-soft); min-width: 60px; font-size: 11.5px; }
+  #infoPopup .info-line a { color: var(--accent-deep); text-decoration: none; }
+  #infoPopup .info-line a:hover { text-decoration: underline; }
+  #infoPopup .info-foot {
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+    font-size: 11px; color: var(--ink-soft); line-height: 1.5;
+  }
+  #infoPopup .info-close {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: none; font-size: 20px; cursor: pointer;
+    color: var(--ink-soft); line-height: 1; padding: 0;
+  }
+  #infoPopup .info-close:hover { color: var(--ink); }
+
+  .hoop-picker {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 4px 10px 4px 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+  }
+  .hoop-picker .hp-label {
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--ink-soft);
+  }
+  .hoop-picker select {
+    background: white; color: var(--ink);
+    border: 1px solid var(--line);
+    padding: 5px 8px;
+    font-size: 12.5px;
+    border-radius: 6px;
+    font-family: inherit;
+    cursor: pointer;
+    min-height: 30px;
+  }
+  .hoop-picker .hp-custom {
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .hoop-picker .hp-custom input {
+    width: 56px; min-height: 30px;
+    padding: 4px 6px;
+    font-size: 12.5px;
+  }
+  .hoop-picker .hp-x { color: var(--ink-soft); font-size: 12px; }
+  .hoop-picker .hp-unit { color: var(--ink-soft); font-size: 11px; }
+  .hoop-picker button { min-height: 30px; padding: 4px 10px; }
+  .hoop-picker input[type="color"] {
+    width: 30px; height: 30px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0;
+    background: white;
+    cursor: pointer;
+  }
+  .panel .color-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+    font-size: 12.5px; color: var(--ink-soft);
+  }
+  .panel .color-row input[type="color"] {
+    width: 36px; height: 28px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0;
+    background: white;
+    cursor: pointer;
+  }
+  .hidden-color {
+    position: absolute; width: 0; height: 0;
+    opacity: 0; pointer-events: none; border: none; padding: 0;
+  }
+  .rainbow-btn {
+    width: 28px; height: 28px; min-height: 28px;
+    background: conic-gradient(from 0deg,
+      #ff5454, #ffae42, #ffd84a, #57cf6f, #2eb6c8,
+      #4477ee, #a661e6, #ee5e9c, #ff5454);
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px var(--line);
+    border-radius: 50%;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0;
+    transition: transform .1s ease;
+  }
+  .rainbow-btn:hover { transform: scale(1.1); }
+
+  .fabric-picker { position: relative; }
+  .fabric-trigger {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 8px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+    min-height: 30px;
+  }
+  .fabric-trigger:hover { background: var(--line-soft); }
+  .fabric-trigger .current-color {
+    width: 18px; height: 18px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 2px white;
+    background: white;
+    margin: 0;
+  }
+  .fabric-trigger .caret {
+    font-size: 10px; color: var(--ink-soft);
+  }
+  .fabric-popup {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 100;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: var(--shadow);
+    display: none;
+  }
+  .fabric-popup.visible { display: block; }
+  .fabric-popup .swatch-row { display: flex; flex-wrap: wrap; gap: 6px; max-width: 230px; }
+
+  /* ---------- Main layout ---------- */
+  #main {
+    flex: 1; display: flex; min-height: 0;
+  }
+  #sidebar {
+    width: 232px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    padding: 10px 10px 14px;
+    display: flex; flex-direction: column; gap: 8px;
+    flex-shrink: 0;
+  }
+  .panel {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 11px 10px;
+    display: flex; flex-direction: column; gap: 6px;
+    box-shadow: var(--shadow-sm);
+  }
+  .panel h2 {
+    font-size: 11px; font-weight: 600; margin: 0 0 2px;
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--accent-deep);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .panel h2::before {
+    content: ""; display: inline-block;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .panel label {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 6px;
+    font-size: 12.5px; color: var(--ink-soft);
+    cursor: default;
+  }
+  .panel label.check {
+    cursor: pointer;
+    justify-content: flex-start;
+    font-size: 12.5px;
+  }
+  .panel .row {
+    display: flex; gap: 6px;
+  }
+  .panel .row > label { flex: 1; }
+  .panel .row.toggles {
+    flex-wrap: wrap; row-gap: 4px;
+  }
+  .panel .row.toggles label.check { flex: 1 1 100%; }
+  .panel .slider-row {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .panel .slider-row .header {
+    display: flex; justify-content: space-between; font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+  .panel .slider-row .header span {
+    color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .panel .slider-row .value-only {
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .panel .help {
+    font-size: 11px; color: var(--ink-faint); line-height: 1.35; margin: 0;
+  }
+
+  /* ---------- Buttons ---------- */
+  button {
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    padding: 9px 14px;
+    cursor: pointer;
+    border-radius: 9px;
+    font-size: 13.5px; font-weight: 500;
+    font-family: inherit;
+    min-height: 38px;
+    transition: background .12s, border-color .12s, transform .05s;
+  }
+  button:hover { background: var(--line-soft); border-color: var(--ink-faint); }
+  button:active { transform: translateY(1px); }
+  button.primary {
+    background: var(--accent); color: white; border-color: var(--accent);
+    box-shadow: 0 2px 6px rgba(58, 109, 110, .3);
+  }
+  button.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+  button.success {
+    background: var(--warm); color: white; border-color: var(--warm);
+    box-shadow: 0 2px 6px rgba(168, 99, 69, .3);
+  }
+  button.success:hover { background: var(--warm-deep); border-color: var(--warm-deep); }
+  button.danger { color: var(--danger); }
+  button.danger:hover { background: #f6e2dd; border-color: #d9b6ac; }
+  button.block { width: 100%; text-align: center; }
+  button.small { padding: 7px 12px; min-height: 32px; font-size: 12.5px; }
+  button.icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 6px; min-width: 32px;
+  }
+  .rot-icon { width: 20px; height: 20px; color: currentColor; display: block; }
+  button.toggle.active {
+    background: var(--accent); color: white; border-color: var(--accent);
+    box-shadow: 0 2px 6px rgba(58, 109, 110, .25);
+  }
+  button.stepper {
+    width: 36px; min-height: 36px; height: 36px;
+    padding: 0; font-size: 17px; font-weight: 600;
+    line-height: 1; flex-shrink: 0;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:focus, input:focus, summary:focus { outline: none; }
+  button:focus-visible, input:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  /* ---------- Inputs ---------- */
+  input[type="number"] {
+    width: 78px; background: var(--bg); color: var(--ink);
+    border: 1px solid var(--line); padding: 8px 10px;
+    border-radius: 7px; font-size: 13.5px; font-family: inherit;
+    text-align: right; font-variant-numeric: tabular-nums;
+    min-height: 38px;
+  }
+  input[type="number"]:focus { background: white; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 6px; background: var(--line); border-radius: 3px;
+    vertical-align: middle; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2); cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2); cursor: pointer;
+  }
+
+  select.block-select {
+    width: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    padding: 7px 10px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-family: inherit;
+    min-height: 36px;
+    cursor: pointer;
+  }
+  select.block-select:focus { background: white; }
+
+  input[type="checkbox"] {
+    -webkit-appearance: none; appearance: none;
+    width: 22px; height: 22px;
+    border: 1.5px solid var(--ink-faint); border-radius: 6px;
+    background: white; cursor: pointer;
+    vertical-align: middle; position: relative;
+    transition: background .12s, border-color .12s;
+    margin: 0 8px 0 0; flex-shrink: 0;
+  }
+  input[type="checkbox"]:checked {
+    background: var(--accent); border-color: var(--accent);
+  }
+  input[type="checkbox"]:checked::after {
+    content: ""; position: absolute;
+    left: 7px; top: 3px; width: 5px; height: 10px;
+    border: solid white; border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
+  }
+
+  /* ---------- Canvas ---------- */
+  #canvasWrap {
+    flex: 1; display: flex; flex-direction: column;
+    min-width: 0; min-height: 0;
+  }
+  #canvasArea {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 0; min-width: 0;
+    padding: 8px;
+    overflow: hidden;
+  }
+  #canvasStack {
+    position: relative;
+    background: var(--canvas-bg);
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(40, 30, 20, .08);
+    width: 100%;
+    height: 100%;
+  }
+  canvas { position: absolute; top: 0; left: 0; }
+  #bgCanvas, #stitchCanvas { pointer-events: none; }
+  #liveCanvas { touch-action: none; cursor: crosshair; }
+
+  /* ---------- Status bar ---------- */
+  #status {
+    padding: 10px 18px;
+    font-size: 12px; color: var(--ink-soft);
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    flex-shrink: 0;
+  }
+  .pill {
+    background: var(--panel-2);
+    padding: 4px 11px; border-radius: 999px;
+    color: var(--ink);
+    border: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  .pill em { font-style: normal; color: var(--accent-deep); font-weight: 600; }
+  .hint { color: var(--ink-faint); margin-left: auto; font-size: 12px; }
+  .hint kbd {
+    background: var(--panel-2); border: 1px solid var(--line);
+    padding: 1px 6px; border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; color: var(--ink-soft);
+  }
+
+  /* ---------- Vorlage-Toolbar (zweite Zeile) ---------- */
+  #vorlagebar {
+    display: none;
+    align-items: center; gap: 12px;
+    padding: 8px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  #vorlagebar.visible { display: flex; }
+  #vorlagebar .label-tag {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--accent-deep);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  #vorlagebar .label-tag::before {
+    content: ""; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .vorlage-divider {
+    width: 1px; align-self: stretch;
+    background: var(--line);
+    flex-shrink: 0;
+  }
+  .stepper-row.inline,
+  .slider-row.inline {
+    display: flex; flex-direction: row; align-items: center; gap: 6px;
+  }
+  .stepper-row.inline .label,
+  .slider-row.inline .label {
+    color: var(--ink-soft); font-size: 12.5px;
+  }
+  .slider-row.inline input[type="range"] { width: 110px; }
+  .slider-row.inline .value {
+    min-width: 48px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink); font-weight: 500; font-size: 12.5px;
+  }
+  #vorlagebar label.check {
+    display: flex; align-items: center; cursor: pointer;
+    font-size: 12.5px; color: var(--ink-soft);
+  }
+
+  /* ---------- Stitch type chooser ---------- */
+  .stitch-types {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 5px;
+  }
+  .stitch-types button.stitch-type-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+    padding: 7px 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink-soft);
+    font-size: 11.5px;
+    font-weight: 500;
+    min-height: 50px; min-width: 0;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .stitch-types button.stitch-type-btn:hover {
+    background: var(--line-soft); border-color: var(--ink-faint);
+  }
+  .stitch-types button.stitch-type-btn.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-deep);
+    font-weight: 600;
+  }
+  .st-icon {
+    width: 38px; height: 14px;
+    color: var(--ink);
+    flex-shrink: 0;
+  }
+  .stitch-types button.active .st-icon { color: var(--accent-deep); }
+
+  /* ---------- Text-Variant + Stichart-Auswahl ---------- */
+  .text-variants, .text-stitch-types {
+    display: grid;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .text-variants { grid-template-columns: 1fr 1fr 1fr; }
+  .text-stitch-types { grid-template-columns: 1fr 1fr 1fr; }
+  .text-variant-btn, .text-stitch-btn {
+    display: flex; align-items: center; justify-content: center;
+    padding: 6px 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--ink-soft);
+    min-height: 32px; min-width: 0;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .text-variant-btn:hover, .text-stitch-btn:hover {
+    background: var(--line-soft); border-color: var(--ink-faint);
+  }
+  .text-variant-btn.active, .text-stitch-btn.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-deep);
+  }
+
+  /* ---------- Tool buttons (Korrigieren) ---------- */
+  .tool-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .tool-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+    padding: 8px 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink-soft);
+    font-size: 11.5px;
+    font-weight: 500;
+    min-height: 56px; min-width: 0;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .tool-btn:hover {
+    background: var(--line-soft); border-color: var(--ink-faint);
+  }
+  .tool-btn.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-deep);
+    font-weight: 600;
+  }
+  .tool-icon {
+    width: 24px; height: 24px;
+    color: var(--ink);
+    flex-shrink: 0;
+  }
+  .tool-btn.active .tool-icon { color: var(--accent-deep); }
+  .tool-label { line-height: 1; }
+
+  /* ---------- Bewegen-Pfeile (D-Pad) ---------- */
+  .move-grid {
+    display: grid;
+    grid-template-columns: 36px 36px 36px;
+    grid-template-rows: 36px 36px;
+    grid-template-areas:
+      ". up ."
+      "left down right";
+    gap: 4px;
+    justify-content: center;
+  }
+
+  /* ---------- Color swatches ---------- */
+  .swatch-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .swatch {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px var(--line);
+    cursor: pointer;
+    transition: transform .1s ease, box-shadow .1s ease;
+    padding: 0; min-height: 28px;
+  }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch.active {
+    box-shadow: 0 0 0 2px var(--ink);
+    transform: scale(1.08);
+  }
+  .swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+
+  /* ---------- Stepper rows ---------- */
+  .stepper-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .stepper-row .label {
+    font-size: 13px; color: var(--ink-soft); flex: 1;
+  }
+  .stepper-row .value {
+    min-width: 56px; text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink); font-weight: 500; font-size: 13.5px;
+  }
+
+  /* ---------- Save group (Topbar) ---------- */
+  .save-group {
+    display: flex; align-items: stretch;
+    background: var(--warm);
+    border-radius: 9px;
+    box-shadow: 0 2px 6px rgba(168, 99, 69, .3);
+  }
+  .save-group > button#btnSave {
+    background: var(--warm); color: white; border: none;
+    box-shadow: none;
+    border-radius: 9px 0 0 9px;
+    padding: 9px 16px;
+  }
+  .save-group > button#btnSave:hover { background: var(--warm-deep); }
+  .save-format {
+    background: var(--warm); color: white;
+    border: none;
+    border-left: 1px solid rgba(255,255,255,.3);
+    border-radius: 0 9px 9px 0;
+    padding: 0 10px 0 8px;
+    font-size: 12.5px; font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    min-height: 36px;
+  }
+  .save-format:focus { background: var(--warm-deep); }
+  .save-format option { background: white; color: var(--ink); font-weight: 500; }
+
+  /* ---------- Collapsible "Mehr Einstellungen" ---------- */
+  details.more { margin: 0; }
+  details.more > summary {
+    cursor: pointer;
+    padding: 8px 12px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--panel-2);
+    list-style: none;
+    text-align: center;
+    user-select: none;
+    box-shadow: var(--shadow-sm);
+  }
+  details.more > summary::-webkit-details-marker { display: none; }
+  details.more > summary::after {
+    content: " ▾"; color: var(--ink-faint); margin-left: 4px;
+  }
+  details.more[open] > summary::after { content: " ▴"; }
+  details.more[open] {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  details.more[open] > .panel { margin-top: 0; }
+
+  /* ---------- Move-Image banner ---------- */
+  #moveBanner, #clickBanner, #eraseBanner, #moveStitchBanner {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: white;
+    padding: 10px 22px;
+    border-radius: 999px;
+    font-size: 15px; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,.18);
+    pointer-events: none;
+    display: none;
+  }
+  #eraseBanner { background: var(--danger); }
+  #moveStitchBanner { background: var(--warm-deep); }
+  #moveBanner.visible, #clickBanner.visible, #eraseBanner.visible,
+  #moveStitchBanner.visible { display: block; }
+  #liveCanvas.move-mode { cursor: move; }
+  #liveCanvas.erase-mode { cursor: none; }
+  #liveCanvas.movestitch-mode { cursor: grab; }
+  #liveCanvas.movestitch-mode:active { cursor: grabbing; }
+
+  .overlay-pill {
+    position: absolute;
+    right: 12px;
+    background: rgba(255, 255, 255, .9);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+    z-index: 5;
+  }
+  #statStitches { bottom: 12px; }
+  #statTime { bottom: 38px; }
+  .overlay-pill em { font-style: normal; color: var(--accent-deep); font-weight: 600; }
+
+  /* ---------- Empty hint over canvas ---------- */
+  #welcome {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+    color: var(--ink-soft);
+    font-size: 14px;
+    text-align: center;
+    padding: 24px;
+  }
+  #welcome .card {
+    background: rgba(255,255,255,.85);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 26px;
+    box-shadow: var(--shadow);
+    max-width: 360px;
+    line-height: 1.5;
+  }
+  #welcome .card strong { color: var(--ink); }
+  #welcome.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <div class="brand">
+    <div class="logo">S</div>
+    <h1>StitchPath</h1>
+    <span class="warn-note" title="Diese App ist experimentell. Keine Gewähr, dass die exportierten Stickdateien fehlerfrei auf einer Stickmaschine laufen.">
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <path d="M8 1.5 L15 14 L1 14 Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        <path d="M8 6 L8 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <circle cx="8" cy="12" r="0.8" fill="currentColor"/>
+      </svg>
+      experimentell
+    </span>
+  </div>
+  <div class="topactions">
+    <div class="hoop-picker">
+      <span class="hp-label">Rahmen</span>
+      <select id="hoopPreset"></select>
+      <span id="hoopCustom" class="hp-custom" style="display:none">
+        <input type="number" id="hoopW" value="130">
+        <span class="hp-x">×</span>
+        <input type="number" id="hoopH" value="100">
+        <span class="hp-unit">mm</span>
+      </span>
+      <button id="btnRotateHoop" class="small icon-btn" title="Rahmen um 90° drehen (Hoch- ↔ Querformat)">
+        <svg viewBox="0 0 24 24" class="rot-icon" aria-hidden="true">
+          <!-- Querformat-Rahmen (durchgezogen, aktueller Zustand) -->
+          <rect x="3" y="9" width="12" height="8" rx="1.2"
+                fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linejoin="round"/>
+          <!-- Hochformat-Rahmen (gestrichelt, Zielzustand) -->
+          <rect x="7" y="5" width="8" height="12" rx="1.2"
+                fill="none" stroke="currentColor" stroke-width="1.2"
+                stroke-dasharray="2 1.8" opacity="0.5"
+                stroke-linejoin="round"/>
+          <!-- Drehpfeil oben rechts: dicker Viertelkreis + grosse, gefüllte Pfeilspitze, die in Drehrichtung zeigt -->
+          <path d="M13.5 3 A8 8 0 0 1 21 10.5"
+                fill="none" stroke="currentColor" stroke-width="2.4"
+                stroke-linecap="round"/>
+          <polygon points="21,13.5 17.8,9.8 23.6,9.8"
+                   fill="currentColor" stroke="currentColor"
+                   stroke-width="0.6" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="hoop-picker fabric-picker">
+      <span class="hp-label">Hintergrund</span>
+      <button id="btnFabricToggle" class="fabric-trigger" type="button" title="Hintergrundfarbe wählen">
+        <span class="current-color" id="fabricSwatch"></span>
+        <span class="caret">▾</span>
+      </button>
+      <input type="color" id="fabricCustom" value="#fbf8f2" class="hidden-color">
+      <div class="fabric-popup" id="fabricPopup">
+        <div class="swatch-row" id="fabricSwatchRow"></div>
+      </div>
+    </div>
+    <button id="btnLoadImage" class="primary">Bild einfügen</button>
+    <button id="btnImportProject">Importieren</button>
+    <div class="save-group">
+      <button id="btnSave">Speichern</button>
+      <select id="saveFormat" class="save-format">
+        <option value="dst">DST</option>
+        <option value="json">Projekt</option>
+      </select>
+    </div>
+  </div>
+</header>
+
+<div id="vorlagebar">
+  <span class="label-tag">Vorlage</span>
+  <button id="btnMoveImage" class="toggle small">Bild bewegen</button>
+  <div class="vorlage-divider"></div>
+  <div class="stepper-row inline">
+    <span class="label">Grösse</span>
+    <button class="stepper" id="btnScaleDown" title="Kleiner">−</button>
+    <span class="value" id="imgScaleDisplay">100 %</span>
+    <button class="stepper" id="btnScaleUp" title="Grösser">+</button>
+  </div>
+  <div class="vorlage-divider"></div>
+  <div class="stepper-row inline">
+    <span class="label">Drehung</span>
+    <button class="stepper" id="btnRotLeft" title="Nach links">↶</button>
+    <span class="value" id="imgRotDisplay">0°</span>
+    <button class="stepper" id="btnRotRight" title="Nach rechts">↷</button>
+  </div>
+  <div class="vorlage-divider"></div>
+  <label class="check"><input type="checkbox" id="imgMirX">Spiegeln ↔</label>
+  <label class="check"><input type="checkbox" id="imgMirY">Spiegeln ↕</label>
+  <div class="vorlage-divider"></div>
+  <div class="slider-row inline">
+    <span class="label">Sichtbarkeit</span>
+    <input type="range" id="opacity" min="0" max="1" step="0.01" value="0.5">
+    <span class="value" id="opacityLabel">50 %</span>
+  </div>
+  <div class="vorlage-divider"></div>
+  <button id="btnClearImage" class="small">Vorlage entfernen</button>
+</div>
+
+<div id="main">
+  <aside id="sidebar">
+
+    <section class="panel" id="stickenPanel">
+      <h2>Sticken</h2>
+      <div class="stitch-types" id="stitchTypes">
+        <button type="button" class="stitch-type-btn active" data-type="running" title="Geradstich">
+          <svg viewBox="0 0 40 16" class="st-icon" aria-hidden="true">
+            <line x1="3" y1="8" x2="37" y2="8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button type="button" class="stitch-type-btn" data-type="triple" title="Mehrfach – parallele Bahnen">
+          <svg viewBox="0 0 40 16" class="st-icon" aria-hidden="true">
+            <line x1="3" y1="4.5" x2="37" y2="4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="3" y1="8" x2="37" y2="8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="3" y1="11.5" x2="37" y2="11.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button type="button" class="stitch-type-btn" data-type="zigzag" title="Zickzack – kleiner Stichabstand ergibt Satinstich (Bördli)">
+          <svg viewBox="0 0 40 16" class="st-icon" aria-hidden="true">
+            <polyline points="3,13 9,3 15,13 21,3 27,13 33,3 37,9"
+                      fill="none" stroke="currentColor" stroke-width="1.8"
+                      stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button type="button" class="stitch-type-btn" data-type="text" title="Text — Klick auf Canvas zum Platzieren">
+          <svg viewBox="0 0 40 16" class="st-icon" aria-hidden="true">
+            <text x="20" y="13" text-anchor="middle"
+                  font-family="Georgia, serif" font-size="14" font-weight="700"
+                  fill="currentColor">ABC</text>
+          </svg>
+        </button>
+      </div>
+      <div class="slider-row" id="textRow" style="display:none">
+        <div class="header"><span>Text</span></div>
+        <input type="text" id="textInput" maxlength="40" placeholder="Was möchtest du sticken?"
+               style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:var(--panel);color:var(--ink);box-sizing:border-box;">
+        <div class="header" style="margin-top:10px"><span>Stichart</span></div>
+        <div class="text-stitch-types" id="textStitchTypes">
+          <button type="button" class="text-stitch-btn active" data-tstype="running" title="Geradstich (dünn)">
+            <svg viewBox="0 0 32 12" class="st-icon" aria-hidden="true">
+              <line x1="2" y1="6" x2="30" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button type="button" class="text-stitch-btn" data-tstype="triple" title="Mehrfach (mittel)">
+            <svg viewBox="0 0 32 12" class="st-icon" aria-hidden="true">
+              <line x1="2" y1="3.5" x2="30" y2="3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <line x1="2" y1="6" x2="30" y2="6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <line x1="2" y1="8.5" x2="30" y2="8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button type="button" class="text-stitch-btn" data-tstype="zigzag" title="Zickzack / Satin (fett)">
+            <svg viewBox="0 0 32 12" class="st-icon" aria-hidden="true">
+              <polyline points="2,10 6,2 10,10 14,2 18,10 22,2 26,10 30,2"
+                        fill="none" stroke="currentColor" stroke-width="1.6"
+                        stroke-linejoin="round" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="header" style="margin-top:10px">
+          <span>Schrifthöhe</span>
+          <span><span id="textHeightLabel">10.0</span> mm</span>
+        </div>
+        <input type="range" id="textHeightMm" min="3" max="40" step="0.5" value="10">
+        <div class="header" style="margin-top:8px">
+          <span>Drehung</span>
+          <span><span id="textRotLabel">0</span>°</span>
+        </div>
+        <input type="range" id="textRotDeg" min="-180" max="180" step="15" value="0">
+        <div id="textZigzagWidthRow" style="display:none">
+          <div class="header" style="margin-top:8px">
+            <span>Satin-Breite</span>
+            <span><span id="textLwLabel">1.5</span> mm</span>
+          </div>
+          <input type="range" id="textLwMm" min="0.6" max="6" step="0.1" value="1.5">
+          <div class="header" style="margin-top:8px">
+            <span>Satin-Abstand</span>
+            <span><span id="textDistLabel">0.2</span> mm</span>
+          </div>
+          <input type="range" id="textDistMm" min="0.1" max="1" step="0.05" value="0.2">
+        </div>
+        <div style="margin-top:8px;font-size:11.5px;color:var(--ink-soft);">
+          Tipp ins Stickfeld, um den Text dort zu platzieren.
+        </div>
+      </div>
+      <div class="slider-row" id="distRow">
+        <div class="header">
+          <span>Stichlänge</span>
+          <span><span id="distLabel">0.4</span> mm</span>
+        </div>
+        <input type="range" id="distMm" min="0.4" max="7" step="0.1" value="0.4">
+      </div>
+      <div class="slider-row" id="lwRow">
+        <div class="header">
+          <span>Breite</span>
+          <span><span id="lwLabel">2.0</span> mm</span>
+        </div>
+        <input type="range" id="lineWidthMm" min="0.4" max="20" step="0.1" value="2.0">
+      </div>
+      <div class="slider-row" id="multiRow">
+        <div class="header">
+          <span>Anzahl Bahnen</span>
+          <span><span id="multiLabel">3</span></span>
+        </div>
+        <input type="range" id="multiCount" min="2" max="20" step="1" value="3">
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Faden</h2>
+      <div class="swatch-row" id="swatchRow"></div>
+      <input type="color" id="threadCustom" value="#2a2620" class="hidden-color">
+    </section>
+
+    <section class="panel">
+      <h2>Korrigieren</h2>
+      <div class="tool-btns">
+        <button type="button" id="btnMoveStitch" class="tool-btn" title="Linie verschieben">
+          <svg viewBox="0 0 24 24" class="tool-icon" aria-hidden="true">
+            <path d="M12 4v16M4 12h16M12 4l-3 3M12 4l3 3M12 20l-3-3M12 20l3-3M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"
+                  fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="tool-label">Verschieben</span>
+        </button>
+        <button type="button" id="btnEraser" class="tool-btn" title="Radierer">
+          <svg viewBox="0 0 24 24" class="tool-icon" aria-hidden="true">
+            <path d="M16.5 3.5L20.5 7.5L9.5 18.5L3 18.5L3 14L14 3.5L16.5 3.5Z"
+                  fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+            <line x1="9.5" y1="9" x2="15" y2="14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span class="tool-label">Radierer</span>
+        </button>
+      </div>
+      <div class="slider-row" id="eraserSizeRow">
+        <div class="header">
+          <span>Radierer-Grösse</span>
+          <span><span id="eraserSizeLabel">4</span> mm</span>
+        </div>
+        <input type="range" id="eraserSizeMm" min="1" max="20" step="0.5" value="4">
+      </div>
+      <button id="btnUndoPath" class="block" title="Cmd / Ctrl + Z">Rückgängig</button>
+      <button id="btnClear" class="block danger">Alles löschen</button>
+    </section>
+
+
+    <details class="more">
+      <summary>Mehr Einstellungen</summary>
+      <section class="panel">
+        <h2>Alles skalieren</h2>
+        <div class="stepper-row">
+          <span class="label">Grösse</span>
+          <button class="stepper" id="btnScaleAllDown" title="Kleiner">−</button>
+          <button class="stepper" id="btnScaleAllUp" title="Grösser">+</button>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Alles verschieben</h2>
+        <div class="move-grid">
+          <button class="stepper" id="btnMoveAllUp" style="grid-area:up" title="Nach oben">↑</button>
+          <button class="stepper" id="btnMoveAllLeft" style="grid-area:left" title="Nach links">←</button>
+          <button class="stepper" id="btnMoveAllRight" style="grid-area:right" title="Nach rechts">→</button>
+          <button class="stepper" id="btnMoveAllDown" style="grid-area:down" title="Nach unten">↓</button>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Anzeige</h2>
+        <div class="row toggles">
+          <label class="check"><input type="checkbox" id="showGrid" checked>Raster</label>
+          <label class="check"><input type="checkbox" id="showJumps">Sprünge</label>
+        </div>
+      </section>
+    </details>
+
+  </aside>
+
+  <div id="canvasWrap">
+    <div id="canvasArea">
+    <div id="canvasStack">
+      <canvas id="bgCanvas"></canvas>
+      <canvas id="stitchCanvas"></canvas>
+      <canvas id="liveCanvas"></canvas>
+      <div id="moveBanner">Bild bewegen — ziehen zum Verschieben</div>
+      <div id="clickBanner">Doppelklick, Enter oder Esc zum Beenden</div>
+      <div id="eraseBanner">Radieren — Linie anklicken zum Löschen</div>
+      <div id="moveStitchBanner">Linie verschieben — Linie packen und ziehen</div>
+      <span id="statStitches" class="overlay-pill">Stiche: <em>0</em></span>
+      <span id="statTime" class="overlay-pill">Stickzeit: <em>0 s</em></span>
+    </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/png,image/jpeg,image/gif,image/bmp,image/webp" style="display:none">
+
+<button id="infoBtn" type="button" title="Info">i</button>
+
+<div id="infoPopup" style="display:none">
+  <button class="info-close" id="infoPopupClose" type="button" aria-label="Schliessen">&times;</button>
+  <div class="info-title">StitchPath</div>
+  <div class="info-sub">Browser-basierter Stickdaten-Editor (DST)</div>
+  <div class="info-line"><span class="info-label">Autor</span> Lukas Jordi</div>
+  <div class="info-line"><span class="info-label">Kontakt</span> <a href="mailto:lukasjordi@gmail.com">lukasjordi@gmail.com</a></div>
+  <div class="info-line"><span class="info-label">Lizenz</span> <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener">CC BY-NC 4.0</a></div>
+  <div class="info-line"><span class="info-label">Jahr</span> 2026</div>
+  <div class="info-foot">Frei nutzbar für private, schulische und nicht-kommerzielle Zwecke. Kommerzielle Nutzung nur mit schriftlicher Genehmigung des Autors. Experimentell — keine Gewähr für fehlerfreie Stickdateien.</div>
+</div>
+
+<script>
+"use strict";
+
+// ============================================================
+// === Const ===
+// ============================================================
+const SP = {};
+SP.Const = {
+  MACHINE_PER_MM: 10,
+  DST_DELTA_LIMIT: 121,
+  EXP_DELTA_LIMIT: 127,
+  STORAGE_KEY: "stitchpath:v1",
+  DEFAULT_HOOP: { wMm: 100, hMm: 100 },
+  DEFAULT_DIST_MM: 0.4,
+  // Stichlänge-Bereich. Geradstich/Mehrfach gehen nicht unter 0.4 mm (sonst
+  // wird der Faden zu dicht / die Nadel überlastet). Zickzack/Satin dürfen
+  // bis 0.1 mm runter, damit dichte Füllungen sauber decken. Maximum für
+  // alle Typen 7 mm (Industrie-Standard für Einzelstich-Länge).
+  MIN_DIST_MM_ABS: 0.1,
+  MIN_DIST_BY_TYPE: { running: 0.4, triple: 0.4, zigzag: 0.1 },
+  MAX_DIST_MM: 7.0,
+  // Default-Stichlänge je Stichtyp.
+  DEFAULT_DIST_BY_TYPE: { running: 0.4, triple: 0.4, zigzag: 0.2 },
+  STITCH_TYPE: { NORMAL: 0, JUMP: 1, COLOR_CHANGE: 2, TRIM: 3, END: 4 },
+};
+
+// ============================================================
+// === Hoop ===
+// ============================================================
+SP.Hoop = (() => {
+  let wMm = 130;
+  let hMm = 100;
+  let cornerRadiusMm = 18;
+  return {
+    getSize() { return { wMm, hMm }; },
+    setSize(w, h) {
+      wMm = Math.max(10, Math.min(1000, w || wMm));
+      hMm = Math.max(10, Math.min(1000, h || hMm));
+    },
+    getCornerRadiusMm() { return cornerRadiusMm; },
+    setCornerRadiusMm(r) { cornerRadiusMm = Math.max(0, r || 0); },
+    mmToMachine(p) {
+      return { x: Math.round(p.xMm * 10), y: Math.round(-p.yMm * 10) };
+    },
+    machineToMm(p) {
+      return { xMm: p.x / 10, yMm: -p.y / 10 };
+    },
+  };
+})();
+// Stickrahmen-Voreinstellungen mit recherchierten Stickfeld-Geometrien.
+// Bernina-Rahmen mit "oval"/"Pillenform"-Designprinzip (S, L Oval, Mega, Jumbo)
+// werden als echte Stadionform modelliert (Eckenradius = halbe kürzere Seite,
+// von roundedRectPath automatisch geclamped).
+// Brother / Janome / Pfaff / Viking sind in ihren Stick-Engines (PE-Design,
+// Embird) als exakte Rechtecke definiert → rMm = 0.
+// Erweiterte Farbliste – wird in Faden- und Stoff-Auswahl als Dropdown angeboten.
+SP.ColorPresets = [
+  { hex: "#2a2620", name: "Schwarz" },
+  { hex: "#1a1a1a", name: "Tiefschwarz" },
+  { hex: "#3b3b3b", name: "Anthrazit" },
+  { hex: "#888888", name: "Grau" },
+  { hex: "#cfcfcf", name: "Hellgrau" },
+  { hex: "#f5f5f5", name: "Weiss" },
+  { hex: "#fbf8f2", name: "Naturweiss" },
+  { hex: "#f3e9d2", name: "Crème" },
+  { hex: "#e0d6c2", name: "Leinen" },
+  { hex: "#c8b890", name: "Sand" },
+  { hex: "#7a6b48", name: "Khaki" },
+  { hex: "#c43d2e", name: "Rot" },
+  { hex: "#a52a2a", name: "Bordeaux" },
+  { hex: "#5a1818", name: "Weinrot" },
+  { hex: "#d97742", name: "Orange" },
+  { hex: "#f0a878", name: "Pfirsich" },
+  { hex: "#d8a838", name: "Gelb" },
+  { hex: "#d4af37", name: "Gold" },
+  { hex: "#c89e3a", name: "Senf" },
+  { hex: "#4a8e3e", name: "Grün" },
+  { hex: "#2d4a3e", name: "Tannengrün" },
+  { hex: "#a3d9b1", name: "Mint" },
+  { hex: "#3a9b9b", name: "Türkis" },
+  { hex: "#2d68b5", name: "Blau" },
+  { hex: "#1a3a52", name: "Dunkelblau" },
+  { hex: "#0a2545", name: "Marine" },
+  { hex: "#cfdfe8", name: "Hellblau" },
+  { hex: "#7c4f9e", name: "Lila" },
+  { hex: "#9c7cb5", name: "Lavendel" },
+  { hex: "#c95698", name: "Pink" },
+  { hex: "#e84e8b", name: "Magenta" },
+  { hex: "#f0d6dc", name: "Rosa" },
+];
+
+SP.Fabric = (() => {
+  let color = "#fbf8f2";
+  return {
+    getColor() { return color; },
+    setColor(c) {
+      if (typeof c === "string" && /^#?[0-9a-f]{6}$/i.test(c)) {
+        color = c.startsWith("#") ? c : "#" + c;
+      }
+    },
+  };
+})();
+
+SP.HoopPresets = [
+  { id: "bernina-s",      name: "Bernina Small (S) 72×50 — oval",         wMm: 72,  hMm: 50,  rMm: 25 },
+  { id: "bernina-m",      name: "Bernina Medium (M) 100×130",             wMm: 100, hMm: 130, rMm: 18 },
+  { id: "bernina-l",      name: "Bernina Large Oval (L) 145×255 — oval",  wMm: 145, hMm: 255, rMm: 73 },
+  { id: "bernina-mega",   name: "Bernina Mega 150×400 — oval",            wMm: 150, hMm: 400, rMm: 75 },
+  { id: "bernina-maxi",   name: "Bernina Maxi 210×400",                   wMm: 210, hMm: 400, rMm: 30 },
+  { id: "bernina-jumbo",  name: "Bernina Jumbo 260×400 — oval",           wMm: 260, hMm: 400, rMm: 130 },
+  { id: "brother-4x4",    name: "Brother 4×4″ 100×100",                   wMm: 100, hMm: 100, rMm: 0 },
+  { id: "brother-5x7",    name: "Brother 5×7″ 130×180",                   wMm: 130, hMm: 180, rMm: 0 },
+  { id: "brother-6x10",   name: "Brother 6×10″ 160×260",                  wMm: 160, hMm: 260, rMm: 0 },
+  { id: "brother-8x8",    name: "Brother Stellaire 8×8″ 240×240",         wMm: 240, hMm: 240, rMm: 0 },
+  { id: "brother-9x14",   name: "Brother Stellaire 9.5×14″ 240×360",      wMm: 240, hMm: 360, rMm: 0 },
+  { id: "janome-sq20",    name: "Janome SQ20 200×200",                    wMm: 200, hMm: 200, rMm: 0 },
+  { id: "janome-re28",    name: "Janome RE28 200×280",                    wMm: 200, hMm: 280, rMm: 0 },
+  { id: "pfaff-master",   name: "Pfaff Creative Master 240×150",          wMm: 240, hMm: 150, rMm: 0 },
+  { id: "pfaff-imperial", name: "Pfaff/Viking Imperial 360×260",          wMm: 360, hMm: 260, rMm: 0 },
+  { id: "custom",         name: "Eigene Grösse…",                         wMm: null, hMm: null, rMm: 0 },
+];
+
+// ============================================================
+// === Viewport ===
+// ============================================================
+SP.Viewport = (() => {
+  let pxPerMm = 4;
+  let zoom = 1;
+  let panX = 0, panY = 0;
+  let cssW = 0, cssH = 0;
+  let dpr = window.devicePixelRatio || 1;
+  const eff = () => pxPerMm * zoom;
+  const api = {
+    setCanvasSize(w, h) { cssW = w; cssH = h; },
+    setDpr(d) { dpr = d; },
+    getDpr() { return dpr; },
+    getCssSize() { return { w: cssW, h: cssH }; },
+    mmToPx(p) {
+      const e = eff();
+      return { x: cssW / 2 + panX + p.xMm * e, y: cssH / 2 + panY + p.yMm * e };
+    },
+    pxToMm(p) {
+      const e = eff();
+      return { xMm: (p.x - cssW / 2 - panX) / e, yMm: (p.y - cssH / 2 - panY) / e };
+    },
+    setZoom(z, anchorPx) {
+      anchorPx = anchorPx || { x: cssW / 2, y: cssH / 2 };
+      const a = api.pxToMm(anchorPx);
+      zoom = Math.max(0.1, Math.min(40, z));
+      const newE = pxPerMm * zoom;
+      panX = anchorPx.x - cssW / 2 - a.xMm * newE;
+      panY = anchorPx.y - cssH / 2 - a.yMm * newE;
+    },
+    addPan(dx, dy) { panX += dx; panY += dy; },
+    // Setzt Zoom und Pan in einem Schritt so, dass der Welt-Punkt mmAnchor
+    // exakt am Pixel pxTarget landet. Wird vom Pinch-Zoom-Gesten-Handler
+    // benutzt, damit der Punkt unter den zwei Fingern stets fixiert bleibt.
+    setZoomAtAnchor(z, mmAnchor, pxTarget) {
+      zoom = Math.max(0.1, Math.min(40, z));
+      const newE = pxPerMm * zoom;
+      panX = pxTarget.x - cssW / 2 - mmAnchor.xMm * newE;
+      panY = pxTarget.y - cssH / 2 - mmAnchor.yMm * newE;
+    },
+    fitHoop() {
+      const { wMm, hMm } = SP.Hoop.getSize();
+      if (cssW <= 0 || cssH <= 0) return;
+      const margin = 24;
+      const sx = (cssW - 2 * margin) / wMm;
+      const sy = (cssH - 2 * margin) / hMm;
+      pxPerMm = Math.max(0.5, Math.min(sx, sy));
+      zoom = 1;
+      panX = 0; panY = 0;
+    },
+    getZoom() { return zoom; },
+    getPan() { return { x: panX, y: panY }; },
+    getEffectivePxPerMm() { return eff(); },
+    getState() { return { zoom, panX, panY, pxPerMm }; },
+    setState(s) {
+      if (typeof s.zoom === "number") zoom = s.zoom;
+      if (typeof s.panX === "number") panX = s.panX;
+      if (typeof s.panY === "number") panY = s.panY;
+      if (typeof s.pxPerMm === "number") pxPerMm = s.pxPerMm;
+    },
+  };
+  return api;
+})();
+
+// ============================================================
+// === StitchModel ===
+// ============================================================
+SP.StitchModel = (() => {
+  const T = SP.Const.STITCH_TYPE;
+  let paths = [];
+  let activeId = null;
+  let palette = [
+    "#2a2620", "#c43d2e", "#2d68b5", "#4a8e3e",
+    "#d8a838", "#d97742", "#7c4f9e", "#c95698", "#ffffff",
+  ];
+  let currentColorIndex = 0;
+  let lineWidthMm = 2.0;
+  let multiCount = 3;
+  let currentStitchType = "running";
+  const STITCH_TYPES = ["running", "triple", "zigzag", "text"];
+  let dstSwapX81 = true; // DST-Bit-Konvention: default Bernina (bit 2 = x+81, bit 3 = x-81)
+  let undoStack = [];
+  let redoStack = [];
+  const MAX_REDO = 50;
+  let nextId = 1;
+  const find = (id) => paths.find((p) => p.id === id);
+  function snapshot() {
+    return {
+      paths: paths.map((p) => ({
+        ...p,
+        stitches: p.stitches.map((s) => ({ ...s })),
+      })),
+      nextId,
+    };
+  }
+  function restoreSnapshot(s) {
+    paths = (s.paths || []).map((p) => ({
+      ...p,
+      stitches: (p.stitches || []).map((x) => ({ ...x })),
+    }));
+    if (typeof s.nextId === "number") nextId = s.nextId;
+    activeId = null;
+  }
+  function pushRedo() {
+    redoStack.push(snapshot());
+    if (redoStack.length > MAX_REDO) redoStack.shift();
+  }
+  function clearRedo() { redoStack = []; }
+
+  return {
+    newPath(meta) {
+      meta = meta || {};
+      const id = nextId++;
+      const colorIndex = meta.colorIndex !== undefined ? meta.colorIndex : currentColorIndex;
+      let stitchType = meta.stitchType || currentStitchType;
+      if (stitchType === "satin") stitchType = "zigzag"; // legacy
+      const lwMm = (typeof meta.lineWidthMm === "number") ? meta.lineWidthMm : lineWidthMm;
+      const mc = (typeof meta.multiCount === "number") ? meta.multiCount : multiCount;
+      const dist = (typeof meta.stitchDistMm === "number")
+        ? meta.stitchDistMm
+        : (SP.PointerInput && SP.PointerInput.getMinDistanceMm
+            ? SP.PointerInput.getMinDistanceMm() : 1.0);
+      paths.push({
+        id, colorIndex, stitchType,
+        lineWidthMm: lwMm,
+        multiCount: mc,
+        stitchDistMm: dist,
+        stitches: [],
+      });
+      activeId = id;
+      undoStack.push({ op: "newPath", id });
+      clearRedo();
+      return id;
+    },
+    getCurrentStitchType() { return currentStitchType; },
+    setCurrentStitchType(t) {
+      if (t === "satin") t = "zigzag"; // legacy
+      if (STITCH_TYPES.indexOf(t) >= 0) currentStitchType = t;
+    },
+    getStitchTypes() { return STITCH_TYPES.slice(); },
+    getMultiCount() { return multiCount; },
+    setMultiCount(n) {
+      const v = parseInt(n, 10);
+      if (!isNaN(v)) multiCount = Math.max(2, Math.min(20, v));
+    },
+    getDstSwapX81() { return dstSwapX81; },
+    setDstSwapX81(v) { dstSwapX81 = !!v; },
+    getCurrentColorIndex() { return currentColorIndex; },
+    setCurrentColorIndex(i) {
+      if (typeof i !== "number") return;
+      currentColorIndex = ((i % palette.length) + palette.length) % palette.length;
+    },
+    advanceColor() {
+      currentColorIndex = (currentColorIndex + 1) % palette.length;
+      return currentColorIndex;
+    },
+    getLineWidthMm() { return lineWidthMm; },
+    setLineWidthMm(w) {
+      const v = parseFloat(w);
+      if (isNaN(v)) return;
+      lineWidthMm = Math.max(0.1, Math.min(20, v));
+    },
+    appendStitch(s) {
+      const p = find(activeId);
+      if (!p) return;
+      p.stitches.push({
+        xMm: s.xMm, yMm: s.yMm, type: s.type,
+        clicked: !!s.clicked,
+      });
+      undoStack.push({ op: "addStitch", pathId: p.id });
+      clearRedo();
+    },
+    endPath() {
+      const p = find(activeId);
+      if (p && p.stitches.length === 0) {
+        paths = paths.filter((x) => x.id !== p.id);
+        undoStack = undoStack.filter((o) => o.id !== p.id);
+      }
+      activeId = null;
+    },
+    undoLastStitch() {
+      const snap = snapshot();
+      let did = false;
+      while (undoStack.length) {
+        const op = undoStack.pop();
+        if (op.op === "addStitch") {
+          const p = find(op.pathId);
+          if (p) p.stitches.pop();
+          if (p && p.stitches.length === 0) {
+            paths = paths.filter((x) => x.id !== p.id);
+          }
+          did = true; break;
+        }
+        if (op.op === "newPath") {
+          paths = paths.filter((x) => x.id !== op.id);
+          did = true; break;
+        }
+      }
+      if (!did) {
+        for (let i = paths.length - 1; i >= 0; i--) {
+          const p = paths[i];
+          if (p.stitches.length > 0) {
+            p.stitches.pop();
+            if (p.stitches.length === 0) paths.splice(i, 1);
+            did = true; break;
+          }
+        }
+      }
+      if (did) { redoStack.push(snap); if (redoStack.length > MAX_REDO) redoStack.shift(); }
+      return did;
+    },
+    undoLastPath() {
+      if (paths.length === 0) return false;
+      const snap = snapshot();
+      const last = paths.pop();
+      undoStack = undoStack.filter((o) => o.pathId !== last.id && o.id !== last.id);
+      if (activeId === last.id) activeId = null;
+      redoStack.push(snap); if (redoStack.length > MAX_REDO) redoStack.shift();
+      return true;
+    },
+    redo() {
+      if (redoStack.length === 0) return false;
+      const s = redoStack.pop();
+      restoreSnapshot(s);
+      return true;
+    },
+    canRedo() { return redoStack.length > 0; },
+    scaleAllStitches(factor) {
+      if (!isFinite(factor) || factor <= 0 || factor === 1) return false;
+      if (paths.length === 0) return false;
+      const snap = snapshot();
+      for (const p of paths) {
+        for (const s of p.stitches) {
+          s.xMm *= factor;
+          s.yMm *= factor;
+        }
+      }
+      redoStack.push(snap);
+      if (redoStack.length > MAX_REDO) redoStack.shift();
+      return true;
+    },
+    findNearestStitch(mm, radiusMm) {
+      const r2 = radiusMm * radiusMm;
+      let best = null;
+      let bestD2 = Infinity;
+      for (const p of paths) {
+        for (let i = 0; i < p.stitches.length; i++) {
+          const s = p.stitches[i];
+          const dx = s.xMm - mm.xMm, dy = s.yMm - mm.yMm;
+          const d2 = dx * dx + dy * dy;
+          if (d2 <= r2 && d2 < bestD2) {
+            bestD2 = d2;
+            best = { pathId: p.id, stitchIdx: i };
+          }
+        }
+      }
+      return best;
+    },
+    moveStitch(pathId, stitchIdx, xMm, yMm, snapBefore) {
+      const p = paths.find((x) => x.id === pathId);
+      if (!p) return false;
+      const s = p.stitches[stitchIdx];
+      if (!s) return false;
+      if (snapBefore) {
+        redoStack.push(snapshot());
+        if (redoStack.length > MAX_REDO) redoStack.shift();
+      }
+      s.xMm = xMm;
+      s.yMm = yMm;
+      return true;
+    },
+    capturePathPositions(pathId) {
+      const p = paths.find((x) => x.id === pathId);
+      if (!p) return null;
+      return p.stitches.map((s) => ({ xMm: s.xMm, yMm: s.yMm }));
+    },
+    setPathOffset(pathId, originals, dxMm, dyMm, snapBefore) {
+      const p = paths.find((x) => x.id === pathId);
+      if (!p || !originals) return false;
+      if (snapBefore) {
+        redoStack.push(snapshot());
+        if (redoStack.length > MAX_REDO) redoStack.shift();
+      }
+      const n = Math.min(p.stitches.length, originals.length);
+      for (let i = 0; i < n; i++) {
+        p.stitches[i].xMm = originals[i].xMm + dxMm;
+        p.stitches[i].yMm = originals[i].yMm + dyMm;
+      }
+      return true;
+    },
+    translateAllStitches(dxMm, dyMm) {
+      if ((dxMm === 0 && dyMm === 0) || !isFinite(dxMm) || !isFinite(dyMm)) return false;
+      if (paths.length === 0) return false;
+      const snap = snapshot();
+      for (const p of paths) {
+        for (const s of p.stitches) {
+          s.xMm += dxMm;
+          s.yMm += dyMm;
+        }
+      }
+      redoStack.push(snap);
+      if (redoStack.length > MAX_REDO) redoStack.shift();
+      return true;
+    },
+    deletePath(id) {
+      const idx = paths.findIndex((p) => p.id === id);
+      if (idx < 0) return false;
+      paths.splice(idx, 1);
+      undoStack = undoStack.filter((o) => o.pathId !== id && o.id !== id);
+      if (activeId === id) activeId = null;
+      clearRedo();
+      return true;
+    },
+    // Löscht alle Stiche, die im Umkreis von radiusMm um mm liegen.
+    // Pfade, die in der Mitte aufgetrennt werden, werden in mehrere Pfade gesplittet.
+    eraseInRadius(mm, radiusMm) {
+      const r2 = radiusMm * radiusMm;
+      const out = [];
+      let changed = false;
+      // Vor dem eigentlichen Erase: für Pfade, die jetzt zum ersten Mal
+      // radiert werden, den aktuell sichtbaren Render-Zustand "einbacken".
+      // Damit wirkt sich der Radiergummi exakt auf die sichtbare Form aus
+      // und keine spätere Re-Berechnung verschiebt die Bahn.
+      for (const p of paths) {
+        if (p.smoothFrozen) continue;
+        if (p.stitches.length < 2) continue;
+        if (!SP.PathOps) continue;
+        if (
+          p.stitchType === "zigzag" &&
+          p.stitches.length >= 3 &&
+          typeof SP.PathOps.smoothZigzagCenterline === "function"
+        ) {
+          const lw = (typeof p.lineWidthMm === "number")
+            ? p.lineWidthMm : lineWidthMm;
+          const baked = SP.PathOps.smoothZigzagCenterline(p.stitches, lw);
+          if (baked && baked.length === p.stitches.length) {
+            for (let i = 0; i < baked.length; i++) {
+              baked[i].clicked = !!p.stitches[i].clicked;
+              baked[i].type = p.stitches[i].type;
+            }
+            p.stitches = baked;
+            p.smoothFrozen = true;
+          }
+        } else if (
+          p.stitchType === "triple" &&
+          typeof SP.PathOps.computeParallelAxis === "function"
+        ) {
+          // Bei Mehrfachstich Haupt-Achse einfrieren, damit Erase die
+          // parallelen Reihen nicht neu ausrichtet (sonst kippt der ganze
+          // Strang, sobald der Anfang verändert wird).
+          const axis = SP.PathOps.computeParallelAxis(p.stitches);
+          if (axis) {
+            p.parallelAxis = axis;
+            p.smoothFrozen = true;
+          }
+        } else if (p.stitchType === "running") {
+          // Geradstich hat keine Transformation, aber wir markieren ihn
+          // trotzdem als frozen — semantisch konsistent.
+          p.smoothFrozen = true;
+        }
+      }
+      for (const path of paths) {
+        const groups = [];
+        let current = [];
+        let removed = 0;
+        for (const s of path.stitches) {
+          const dx = s.xMm - mm.xMm, dy = s.yMm - mm.yMm;
+          if (dx * dx + dy * dy <= r2) {
+            removed++;
+            if (current.length > 0) { groups.push(current); current = []; }
+          } else {
+            current.push(s);
+          }
+        }
+        if (current.length > 0) groups.push(current);
+        if (removed === 0) { out.push(path); continue; }
+        changed = true;
+        // Mindestens ein Stich entfernt → Pfad neu aufbauen
+        for (let i = 0; i < groups.length; i++) {
+          const g = groups[i];
+          if (g.length === 0) continue;
+          out.push({
+            id: i === 0 ? path.id : nextId++,
+            colorIndex: path.colorIndex,
+            stitchType: path.stitchType,
+            lineWidthMm: path.lineWidthMm,
+            multiCount: path.multiCount,
+            stitchDistMm: path.stitchDistMm,
+            smoothFrozen: !!path.smoothFrozen,
+            parallelAxis: path.parallelAxis || null,
+            stitches: g,
+          });
+        }
+      }
+      if (changed) {
+        paths = out;
+        undoStack = undoStack.filter((o) => {
+          const stillExists = paths.some((p) => p.id === o.pathId || p.id === o.id);
+          return stillExists;
+        });
+        if (!paths.some((p) => p.id === activeId)) activeId = null;
+        clearRedo();
+      }
+      return changed;
+    },
+    clearAll() { paths = []; activeId = null; undoStack = []; clearRedo(); },
+    getActive() { return find(activeId); },
+    // Bestehenden Pfad zur aktiven Bahn machen, damit neue Stiche an dessen
+    // Ende angehängt werden (z. B. nach Klick auf eine bestehende Linie).
+    setActivePath(pathId) {
+      const p = paths.find((x) => x.id === pathId);
+      if (!p) return false;
+      activeId = p.id;
+      return true;
+    },
+    getLastStitchOf(pathId) {
+      const p = paths.find((x) => x.id === pathId);
+      if (!p || !p.stitches.length) return null;
+      return p.stitches[p.stitches.length - 1];
+    },
+    iteratePaths() { return paths; },
+    getPalette() { return palette; },
+    setPalette(p) { palette = p; },
+    getStitchCount() { return paths.reduce((a, p) => a + p.stitches.length, 0); },
+    serialize() {
+      return { paths, palette, nextId, currentColorIndex, lineWidthMm, currentStitchType, multiCount, dstSwapX81 };
+    },
+    deserialize(s) {
+      paths = (s && s.paths) ? s.paths : [];
+      // Palette nur dann übernehmen, wenn mindestens die Standard-8 enthalten sind
+      // (alte Einträge mit nur einer Farbe werden verworfen).
+      if (s && Array.isArray(s.palette) && s.palette.length >= 9 &&
+          s.palette[8] && s.palette[8].toLowerCase() === "#ffffff") {
+        palette = s.palette.slice();
+      }
+      nextId = (s && s.nextId) ? s.nextId : 1;
+      currentColorIndex = (s && typeof s.currentColorIndex === "number")
+        ? Math.min(palette.length - 1, Math.max(0, s.currentColorIndex))
+        : 0;
+      if (s && typeof s.lineWidthMm === "number") {
+        lineWidthMm = Math.max(0.1, Math.min(20, s.lineWidthMm));
+      }
+      if (s && STITCH_TYPES.indexOf(s.currentStitchType) >= 0) {
+        currentStitchType = s.currentStitchType;
+      }
+      if (s && typeof s.multiCount === "number") {
+        multiCount = Math.max(2, Math.min(20, s.multiCount));
+      }
+      dstSwapX81 = !!(s && s.dstSwapX81);
+      activeId = null;
+      undoStack = [];
+    },
+  };
+})();
+
+// ============================================================
+// === PathOps ===
+// ============================================================
+SP.PathOps = (() => {
+  const T = SP.Const.STITCH_TYPE;
+
+  // Parallelverschiebung: jede Reihe ist eine 1:1-Kopie der Mittellinie,
+  // um einen KONSTANTEN Vektor verschoben. Die Verschiebungsrichtung wird
+  // aus den ersten ~5 mm Pfadanfang abgeleitet. Sobald diese gezeichnet
+  // sind, ist die Richtung gesperrt — der Rest des Pfads kann beliebig
+  // wachsen, ohne dass sich die parallelen Reihen verdrehen.
+  const PARALLEL_REF_MM = 1.0;
+  // Berechnet die Hauptachse (Einheitsvektor) eines Pfads aus den ersten
+  // PARALLEL_REF_MM Bogenlänge. Wird sowohl zur Laufzeit (offsetPolyline)
+  // als auch vom Radierer aufgerufen, um die Achse einzufrieren.
+  function computeParallelAxis(stitches) {
+    if (!stitches || stitches.length < 2) return null;
+    let dirX = 0, dirY = 0, acc = 0;
+    for (let i = 1; i < stitches.length; i++) {
+      const a = stitches[i - 1], b = stitches[i];
+      const dx = b.xMm - a.xMm, dy = b.yMm - a.yMm;
+      const L = Math.hypot(dx, dy);
+      if (L === 0) continue;
+      if (acc + L > PARALLEL_REF_MM) {
+        const t = (PARALLEL_REF_MM - acc) / L;
+        dirX += dx * t;
+        dirY += dy * t;
+        acc = PARALLEL_REF_MM;
+        break;
+      }
+      dirX += dx;
+      dirY += dy;
+      acc += L;
+    }
+    const aLen = Math.hypot(dirX, dirY);
+    if (aLen < 1e-6) return null;
+    return { x: dirX / aLen, y: dirY / aLen };
+  }
+
+  function offsetPolyline(stitches, offsetMm, axisOverride) {
+    if (offsetMm === 0 || stitches.length < 2) return stitches.map((s) => ({ ...s }));
+    const axis = axisOverride || computeParallelAxis(stitches);
+    if (!axis) return stitches.map((s) => ({ ...s }));
+    const perpX = -axis.y, perpY = axis.x;
+    const shiftX = perpX * offsetMm;
+    const shiftY = perpY * offsetMm;
+    const out = new Array(stitches.length);
+    for (let i = 0; i < stitches.length; i++) {
+      const s = stitches[i];
+      out[i] = { xMm: s.xMm + shiftX, yMm: s.yMm + shiftY, type: s.type };
+    }
+    return out;
+  }
+
+  // Leichte Polylinien-Glättung (3-Punkt-Mittelung).
+  // factor 0 = keine Glättung, 1 = volle Mittelung der Nachbarn.
+  function smoothPolyline(stitches, factor) {
+    if (!stitches || stitches.length < 3 || factor <= 0) {
+      return stitches.map((s) => ({ ...s }));
+    }
+    const k = Math.max(0, Math.min(1, factor));
+    const out = [{ ...stitches[0] }];
+    for (let i = 1; i < stitches.length - 1; i++) {
+      const a = stitches[i - 1], c = stitches[i], b = stitches[i + 1];
+      // Geklickte Punkte (Ecken / Klick-Anker) bleiben unverändert,
+      // damit explizit gezeichnete Ecken nicht weggeglättet werden.
+      if (c.clicked) {
+        out.push({ ...c });
+        continue;
+      }
+      out.push({
+        xMm: c.xMm * (1 - k) + (a.xMm + b.xMm) * (k / 2),
+        yMm: c.yMm * (1 - k) + (a.yMm + b.yMm) * (k / 2),
+        type: c.type,
+        clicked: c.clicked,
+      });
+    }
+    out.push({ ...stitches[stitches.length - 1] });
+    return out;
+  }
+
+  // Kumulierte Bogenlängen (mm) für eine Polyline. Wird für die
+  // physikalisch-basierte Glättung benutzt.
+  function cumulativeArcLengths(stitches) {
+    const arc = new Float64Array(stitches.length);
+    let s = 0;
+    arc[0] = 0;
+    for (let i = 1; i < stitches.length; i++) {
+      const dx = stitches[i].xMm - stitches[i - 1].xMm;
+      const dy = stitches[i].yMm - stitches[i - 1].yMm;
+      s += Math.hypot(dx, dy);
+      arc[i] = s;
+    }
+    return arc;
+  }
+
+  // mm-basierte Glättung: für jeden Punkt wird der Mittelwert aller
+  // Nachbarpunkte innerhalb von ±radiusMm entlang der Bogenlänge gebildet.
+  // Dadurch ist die Glättungswirkung unabhängig vom Stichabstand — auch
+  // bei sehr kurzer Stichlänge mit vielen dicht beieinander liegenden
+  // Punkten wirkt der Filter weiterhin über die volle physikalische Breite
+  // und dämpft Handzittern wirksam.
+  function smoothByArcRadius(stitches, radiusMm, opts) {
+    if (!stitches || stitches.length < 3 || radiusMm <= 0) {
+      return stitches ? stitches.map((s) => ({ ...s })) : [];
+    }
+    const ignoreClicks = !!(opts && opts.ignoreInteriorClicks);
+    const arc = cumulativeArcLengths(stitches);
+    const n = stitches.length;
+    const out = new Array(n);
+    // Anker für die Wiederherstellung: die Roh-Endpunkte (z. B. Klick-Anfang).
+    const rawStart = { ...stitches[0] };
+    const rawEnd = { ...stitches[n - 1] };
+    let lo = 0, hi = 0;
+    for (let i = 0; i < n; i++) {
+      const c = stitches[i];
+      // Geklickte Anker im Pfad-Inneren bleiben unverändert (scharfe Ecken),
+      // ausser ignoreInteriorClicks ist gesetzt (z. B. für Zickzack/Satin,
+      // wo eine durchgehend glatte Mittellinie wichtiger ist als Klick-Ecken).
+      const isInteriorClick = !ignoreClicks && c.clicked && i > 0 && i < n - 1;
+      if (isInteriorClick) {
+        out[i] = { ...c };
+        continue;
+      }
+      const center = arc[i];
+      const minS = center - radiusMm;
+      const maxS = center + radiusMm;
+      while (hi < n - 1 && arc[hi + 1] <= maxS) hi++;
+      while (lo < i && arc[lo] < minS) lo++;
+      // Innere Klick-Anker im Fenster begrenzen den Mittelungsbereich
+      // (ausser bei ignoreInteriorClicks).
+      let lEdge = lo, rEdge = hi;
+      if (!ignoreClicks) {
+        for (let j = i - 1; j >= lo; j--) {
+          if (j > 0 && stitches[j].clicked) { lEdge = j; break; }
+        }
+        for (let j = i + 1; j <= hi; j++) {
+          if (j < n - 1 && stitches[j].clicked) { rEdge = j; break; }
+        }
+      }
+      // Dreieckskernel mit Spiegel-Randbedingung: am Pfadanfang werden die
+      // Roh-Punkte rechts vom Endpunkt zusätzlich an arc[0] gespiegelt
+      // ("virtuelle" Punkte links), am Pfadende analog. Das hält die Tangente
+      // an den Enden im Einklang mit dem Inneren — kein Knick, kein Schrumpfen.
+      let sumX = 0, sumY = 0, sumW = 0;
+      for (let j = lEdge; j <= rEdge; j++) {
+        const d = Math.abs(arc[j] - center);
+        const w = Math.max(0, 1 - d / radiusMm);
+        if (w <= 0) continue;
+        sumX += stitches[j].xMm * w;
+        sumY += stitches[j].yMm * w;
+        sumW += w;
+      }
+      // Spiegelung am Anfang: virtuelle Punkte mit Bogenlänge -arc[j] und
+      // Position 2*p[0] - p[j]. Wirkt nur wenn der Kernel über das Pfadende
+      // hinausragt (center - radiusMm < arc[lEdge]).
+      if (center - radiusMm < arc[lEdge] - 1e-9) {
+        for (let j = lEdge + 1; j <= rEdge; j++) {
+          const virtArc = 2 * arc[lEdge] - arc[j];
+          const d = Math.abs(virtArc - center);
+          const w = Math.max(0, 1 - d / radiusMm);
+          if (w <= 0) break;
+          const vx = 2 * stitches[lEdge].xMm - stitches[j].xMm;
+          const vy = 2 * stitches[lEdge].yMm - stitches[j].yMm;
+          sumX += vx * w;
+          sumY += vy * w;
+          sumW += w;
+        }
+      }
+      // Spiegelung am Ende.
+      if (center + radiusMm > arc[rEdge] + 1e-9) {
+        for (let j = rEdge - 1; j >= lEdge; j--) {
+          const virtArc = 2 * arc[rEdge] - arc[j];
+          const d = Math.abs(virtArc - center);
+          const w = Math.max(0, 1 - d / radiusMm);
+          if (w <= 0) break;
+          const vx = 2 * stitches[rEdge].xMm - stitches[j].xMm;
+          const vy = 2 * stitches[rEdge].yMm - stitches[j].yMm;
+          sumX += vx * w;
+          sumY += vy * w;
+          sumW += w;
+        }
+      }
+      if (sumW > 0) {
+        out[i] = {
+          xMm: sumX / sumW,
+          yMm: sumY / sumW,
+          type: c.type,
+          clicked: c.clicked,
+        };
+      } else {
+        out[i] = { ...c };
+      }
+    }
+    // Falls die Spiegelung die Endpunkte um mehr als 1e-3 mm verschoben hat
+    // (zahlentechnisch sollte sie identisch bleiben), korrigieren wir das
+    // sanft zurück, damit Tie-In/Tie-Off exakt am Klickpunkt sitzen.
+    const driftStart = {
+      x: rawStart.xMm - out[0].xMm,
+      y: rawStart.yMm - out[0].yMm,
+    };
+    const driftEnd = {
+      x: rawEnd.xMm - out[n - 1].xMm,
+      y: rawEnd.yMm - out[n - 1].yMm,
+    };
+    const totalArc = arc[n - 1] || 1;
+    for (let i = 0; i < n; i++) {
+      const s = arc[i];
+      // Lineare Mischung: Korrektur fällt zur Mitte hin auf 0 ab.
+      const wStart = Math.max(0, 1 - s / Math.min(radiusMm, totalArc));
+      const wEnd = Math.max(0, 1 - (totalArc - s) / Math.min(radiusMm, totalArc));
+      out[i].xMm += driftStart.x * wStart + driftEnd.x * wEnd;
+      out[i].yMm += driftStart.y * wStart + driftEnd.y * wEnd;
+    }
+    return out;
+  }
+
+  // Glättung skaliert mit der Stiftdicke (Stichbreite). Der Filterradius
+  // wird in mm vorgegeben, sodass das Verhalten unabhängig von der
+  // Stichlänge ist. Bei dünnen Pfaden (lw <= 1 mm) wird kaum geglättet.
+  function smoothByWidth(stitches, lwMm) {
+    if (!stitches || stitches.length < 3) {
+      return stitches ? stitches.map((s) => ({ ...s })) : [];
+    }
+    if (lwMm <= 1) return stitches.map((s) => ({ ...s }));
+    // Filterradius wächst etwa mit lw; zwei Durchläufe ergeben ein
+    // weicheres Gauss-ähnliches Profil.
+    const radiusMm = Math.min(8, (lwMm - 1) * 0.6 + 0.4);
+    let out = smoothByArcRadius(stitches, radiusMm);
+    out = smoothByArcRadius(out, radiusMm * 0.6);
+    return out;
+  }
+
+  // Maximale physikalische Stichlänge (Industriestandard ~7 mm, sonst Fadenbruch /
+  // Long-Stitch-Warnung in Stickprogrammen). Längere Zickzack-Diagonalen werden
+  // in mehrere kollineare Teilstiche aufgespalten.
+  const MAX_STITCH_LEN_MM = 7.0;
+
+  // Zentrale Glättungs-Pipeline für Zickzack/Satin. Wird sowohl beim Rendern
+  // (innerhalb expandPath) als auch beim Radierer aufgerufen, um die aktuell
+  // sichtbare Mittellinie als neue Roh-Datenbasis einzufrieren.
+  function smoothZigzagCenterline(stitches, lwMm) {
+    const lw = (typeof lwMm === "number" && lwMm > 0) ? lwMm : 2;
+    if (!stitches || stitches.length < 3) {
+      return stitches ? stitches.map((s) => ({ ...s })) : [];
+    }
+    const radiusMm = Math.min(10, lw * 0.7 + 0.4);
+    const smoothOpts = { ignoreInteriorClicks: true };
+    let smoothed = smoothByArcRadius(stitches, radiusMm, smoothOpts);
+    smoothed = smoothByArcRadius(smoothed, radiusMm * 0.7, smoothOpts);
+    smoothed = smoothByArcRadius(smoothed, radiusMm * 0.4, smoothOpts);
+    return smoothed;
+  }
+
+  function makeZigzag(stitches, stepMm, halfWidthMm) {
+    if (stitches.length < 2) return stitches.map((s) => ({ ...s }));
+    // Wenn die Zickzack-Diagonale länger als MAX_STITCH_LEN_MM ist, müssen wir
+    // jede Diagonale in mehrere Teilstiche aufteilen.
+    const W = 2 * halfWidthMm;
+    const diagLen = Math.sqrt(W * W + stepMm * stepMm);
+    const splits = Math.max(1, Math.ceil(diagLen / MAX_STITCH_LEN_MM));
+    const out = [];
+    // Lead-in: ein Stich auf der Mittellinie am Pfadanfang. Ohne diesen
+    // beginnt der Faden hw entfernt von der Click-Position seitlich
+    // versetzt — das wirkt am Pfadanfang wie ein Knick. Mit Lead-in
+    // läuft der Faden sauber von der Click-Position ins erste Side-Bite.
+    out.push({
+      xMm: stitches[0].xMm,
+      yMm: stitches[0].yMm,
+      type: T.NORMAL,
+      split: true, // damit der Renderer keine 5-%-Lücke zwischen Click und erstem Side-Bite zieht
+    });
+    let side = -1;
+    let leftover = 0;
+    // lastPx/lastPy bewusst null lassen, damit das Splits-Aufteilen NICHT
+    // zwischen Lead-in (Mitte) und erstem Side-Bite einsetzt — der Weg ist
+    // ja nur hw lang, nicht die volle 2·hw Diagonale.
+    let lastPx = null, lastPy = null;
+    let diagonalIdx = 0;
+    for (let i = 0; i < stitches.length - 1; i++) {
+      const a = stitches[i], b = stitches[i + 1];
+      const dx = b.xMm - a.xMm, dy = b.yMm - a.yMm;
+      const segLen = Math.hypot(dx, dy);
+      if (segLen === 0) continue;
+      const ux = dx / segLen, uy = dy / segLen;
+      const px = -uy, py = ux;
+      let pos = leftover;
+      while (pos <= segLen + 1e-6) {
+        const cx = a.xMm + ux * pos, cy = a.yMm + uy * pos;
+        const targetX = cx + px * halfWidthMm * side;
+        const targetY = cy + py * halfWidthMm * side;
+        if (lastPx !== null && splits > 1) {
+          // Zwischenstiche entlang der Diagonale einfügen, damit kein einzelner
+          // Stich länger als MAX_STITCH_LEN_MM wird. Split-Punkte werden mit
+          // `split: true` markiert, damit der Renderer dort KEINE Stichlängen-
+          // Lücke setzt — sonst stapeln sich auf der Mittellinie zwei 5%-Lücken
+          // zu einem sichtbaren weissen Strich.
+          for (let k = 1; k < splits; k++) {
+            const t = k / splits;
+            out.push({
+              xMm: lastPx + (targetX - lastPx) * t,
+              yMm: lastPy + (targetY - lastPy) * t,
+              type: T.NORMAL,
+              split: true,
+            });
+          }
+        }
+        out.push({ xMm: targetX, yMm: targetY, type: T.NORMAL });
+        lastPx = targetX; lastPy = targetY;
+        side = -side;
+        diagonalIdx++;
+        pos += stepMm;
+      }
+      leftover = pos - segLen;
+    }
+    const last = stitches[stitches.length - 1];
+    out.push({ xMm: last.xMm, yMm: last.yMm, type: T.NORMAL });
+    return out;
+  }
+
+  // Echtes Satin: perpendikuläre Sprossen entlang des Pfades.
+  // An jeder Position werden zwei Stiche emittiert (linke und rechte Seite),
+  // sodass der verbindende Stich quer zum Pfad verläuft.
+  function makeSatin(stitches, stepMm, halfWidthMm) {
+    if (stitches.length < 2) return stitches.map((s) => ({ ...s }));
+    const out = [];
+    let side = -1;
+    let leftover = 0;
+    for (let i = 0; i < stitches.length - 1; i++) {
+      const a = stitches[i], b = stitches[i + 1];
+      const dx = b.xMm - a.xMm, dy = b.yMm - a.yMm;
+      const segLen = Math.hypot(dx, dy);
+      if (segLen === 0) continue;
+      const ux = dx / segLen, uy = dy / segLen;
+      const px = -uy, py = ux;
+      let pos = leftover;
+      while (pos <= segLen + 1e-6) {
+        const cx = a.xMm + ux * pos, cy = a.yMm + uy * pos;
+        out.push({
+          xMm: cx + px * halfWidthMm * side,
+          yMm: cy + py * halfWidthMm * side,
+          type: T.NORMAL,
+        });
+        out.push({
+          xMm: cx - px * halfWidthMm * side,
+          yMm: cy - py * halfWidthMm * side,
+          type: T.NORMAL,
+        });
+        side = -side;
+        pos += stepMm;
+      }
+      leftover = pos - segLen;
+    }
+    return out;
+  }
+
+  return {
+    expandPath(stitches, opts) {
+      if (!stitches || stitches.length === 0) return [];
+      opts = opts || {};
+      let stitchType = opts.stitchType || "running";
+      if (stitchType === "satin") stitchType = "zigzag"; // legacy
+      const lw = (typeof opts.lineWidthMm === "number" && opts.lineWidthMm > 0) ? opts.lineWidthMm : 2;
+      const multiCount = (typeof opts.multiCount === "number" && opts.multiCount >= 2)
+        ? Math.round(opts.multiCount) : 3;
+      const stepMm = (typeof opts.stitchDistMm === "number" && opts.stitchDistMm > 0)
+        ? opts.stitchDistMm : 1.0;
+      if (stitchType === "running") {
+        // Geradstich folgt der Hand 1:1 — kein Glätten, damit feines
+        // "Krickeln" und Detail-Konturen erhalten bleiben.
+        return stitches.map((s) => ({ ...s }));
+      }
+      if (stitchType === "triple") {
+        // Mehrfachstich folgt der Hand 1:1 (keine Glättung). Die parallelen
+        // Reihen werden als echte Parallelen erzeugt — d. h. jede Reihe hält
+        // konstant `off` mm senkrechten Abstand zur Mittellinie (Miter-Join an
+        // Ecken), nicht nur eine "Drehung um den Mittelstrich". Übergänge
+        // zwischen Reihen sind JUMP-Stiche (unsichtbar verbunden).
+        const count = multiCount;
+        if (count <= 1) return stitches.map((s) => ({ ...s }));
+        // parallelAxis: vom Radierer eingefroren — damit die parallelen
+        // Reihen nach einem Erase nicht plötzlich neu ausgerichtet werden.
+        const axisOverride = opts.parallelAxis || null;
+        const rows = [];
+        for (let r = 0; r < count; r++) {
+          const t = (count === 1) ? 0.5 : r / (count - 1); // 0..1
+          const off = -lw / 2 + t * lw;
+          rows.push(offsetPolyline(stitches, off, axisOverride));
+        }
+        const out = [];
+        for (let r = 0; r < rows.length; r++) {
+          const row = rows[r];
+          const ordered = (r % 2 === 0) ? row : row.slice().reverse();
+          for (let k = 0; k < ordered.length; k++) {
+            const s = ordered[k];
+            if (r > 0 && k === 0) {
+              // Übergang von der vorigen Reihe zu dieser Reihe: unsichtbarer JUMP.
+              out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
+            } else {
+              out.push({ xMm: s.xMm, yMm: s.yMm, type: T.NORMAL });
+            }
+          }
+        }
+        return out;
+      }
+      if (stitchType === "zigzag") {
+        // Mittellinie mm-basiert glätten: der Filterradius richtet sich nach
+        // der Satinbreite (Pinselradius lw/2). So wirkt die Glättung physikalisch
+        // gleich, egal wie kurz die Stichlänge eingestellt ist — auch bei sehr
+        // dichten Eingabepunkten wird Handzittern zuverlässig herausgefiltert.
+        // ignoreInteriorClicks: bei Satin sollen Klick-Anker die Glättung NICHT
+        // unterbrechen, sonst sehen Klick-Linien wie eckige Ketten aus.
+        // smoothFrozen: wird vom Radierer gesetzt, damit nach dem Erase die
+        // bereits eingefrorene Mittellinie nicht erneut umgeformt wird.
+        let smoothed;
+        if (opts.smoothFrozen) {
+          smoothed = stitches;
+        } else {
+          smoothed = smoothZigzagCenterline(stitches, lw);
+        }
+        return makeZigzag(smoothed, stepMm, lw / 2);
+      }
+      return stitches.map((s) => ({ ...s }));
+    },
+    // Öffentlich verfügbar, damit der Radierer die geglättete Mittellinie
+    // einmalig "einbacken" kann.
+    smoothZigzagCenterline(stitches, lwMm) {
+      return smoothZigzagCenterline(stitches, lwMm);
+    },
+    // Hauptachse der parallelen Reihen — vom Radierer für Mehrfachstich
+    // eingefroren, damit Erase die Bahn nicht reorientiert.
+    computeParallelAxis(stitches) {
+      return computeParallelAxis(stitches);
+    },
+    flattenAll() {
+      const flat = [];
+      const paths = SP.StitchModel.iteratePaths();
+      const fallbackLw = SP.StitchModel.getLineWidthMm();
+      const fallbackMc = SP.StitchModel.getMultiCount();
+      const fallbackDist = SP.PointerInput && SP.PointerInput.getMinDistanceMm
+        ? SP.PointerInput.getMinDistanceMm() : 1.0;
+      const TIE_MM = 1.2; // Tie-Stiche-Länge (typisch 1–1.5 mm)
+      let lastColor = null;
+      for (const p of paths) {
+        if (!p.stitches.length) continue;
+        const expanded = this.expandPath(p.stitches, {
+          stitchType: p.stitchType || "running",
+          lineWidthMm: (typeof p.lineWidthMm === "number") ? p.lineWidthMm : fallbackLw,
+          multiCount: (typeof p.multiCount === "number") ? p.multiCount : fallbackMc,
+          stitchDistMm: (typeof p.stitchDistMm === "number") ? p.stitchDistMm : fallbackDist,
+          smoothFrozen: !!p.smoothFrozen,
+          parallelAxis: p.parallelAxis || null,
+        });
+        if (!expanded.length) continue;
+        if (lastColor !== null && p.colorIndex !== lastColor) {
+          const last = flat[flat.length - 1];
+          flat.push({ xMm: last.xMm, yMm: last.yMm, type: T.COLOR_CHANGE });
+        }
+        const first = expanded[0];
+        flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.JUMP });
+        // Sonderfall: Pfad mit nur 1 Stich (z. B. ein vereinzelter Klick).
+        // Sticken benötigt mindestens ein paar Stiche, um den Faden zu
+        // verankern. Wir erzeugen daher einen kleinen Plus-förmigen Anker
+        // um den Klickpunkt herum (rechts → zurück → links → zurück).
+        if (expanded.length === 1) {
+          flat.push({ xMm: first.xMm + TIE_MM, yMm: first.yMm, type: T.NORMAL });
+          flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.NORMAL });
+          flat.push({ xMm: first.xMm - TIE_MM, yMm: first.yMm, type: T.NORMAL });
+          flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.NORMAL });
+          lastColor = p.colorIndex;
+          continue;
+        }
+        // Tie-In: zwei kurze Verriegelungsstiche am Pfadanfang in Richtung
+        // des nächsten Stichs, damit der Faden gesichert ist. Bei sehr
+        // kleinen Strokes (Punkte, i-Tüpfel) wird der Tie auf die Länge
+        // des Segments begrenzt, damit der Faden-Anker im Buchstaben bleibt.
+        if (expanded.length >= 2) {
+          const next = expanded[1];
+          const dx = next.xMm - first.xMm, dy = next.yMm - first.yMm;
+          const d = Math.hypot(dx, dy);
+          if (d > 0.1) {
+            const ux = dx / d, uy = dy / d;
+            const tieLen = Math.min(TIE_MM, d * 1.2);
+            const tx = first.xMm + ux * tieLen;
+            const ty = first.yMm + uy * tieLen;
+            flat.push({ xMm: tx, yMm: ty, type: T.NORMAL });
+            flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.NORMAL });
+          }
+        }
+        for (let i = 1; i < expanded.length; i++) {
+          const s = expanded[i];
+          flat.push({
+            xMm: s.xMm, yMm: s.yMm,
+            type: s.type === T.JUMP ? T.JUMP : T.NORMAL,
+          });
+        }
+        // Tie-Off: zwei kurze Verriegelungsstiche am Pfadende rückwärts in
+        // Richtung des vorletzten Stichs.
+        if (expanded.length >= 2) {
+          const lastS = expanded[expanded.length - 1];
+          const prev = expanded[expanded.length - 2];
+          const dx = prev.xMm - lastS.xMm, dy = prev.yMm - lastS.yMm;
+          const d = Math.hypot(dx, dy);
+          if (d > 0.1) {
+            const ux = dx / d, uy = dy / d;
+            const tieLen = Math.min(TIE_MM, d * 1.2);
+            const tx = lastS.xMm + ux * tieLen;
+            const ty = lastS.yMm + uy * tieLen;
+            flat.push({ xMm: tx, yMm: ty, type: T.NORMAL });
+            flat.push({ xMm: lastS.xMm, yMm: lastS.yMm, type: T.NORMAL });
+          }
+        }
+        lastColor = p.colorIndex;
+      }
+      if (flat.length > 0) {
+        const last = flat[flat.length - 1];
+        flat.push({ xMm: last.xMm, yMm: last.yMm, type: T.END });
+      }
+      return flat;
+    },
+    toMachineRecords(flat, maxDelta) {
+      const records = [];
+      let curX = 0, curY = 0;
+      for (const s of flat) {
+        if (s.type === T.END || s.type === T.COLOR_CHANGE) {
+          records.push({ dx: 0, dy: 0, type: s.type });
+          continue;
+        }
+        const m = SP.Hoop.mmToMachine({ xMm: s.xMm, yMm: s.yMm });
+        let remX = m.x - curX;
+        let remY = m.y - curY;
+        while (Math.abs(remX) > maxDelta || Math.abs(remY) > maxDelta) {
+          const stepX = Math.max(-maxDelta, Math.min(maxDelta, remX));
+          const stepY = Math.max(-maxDelta, Math.min(maxDelta, remY));
+          records.push({ dx: stepX, dy: stepY, type: T.JUMP });
+          curX += stepX; curY += stepY;
+          remX -= stepX; remY -= stepY;
+        }
+        records.push({ dx: remX, dy: remY, type: s.type });
+        curX = m.x; curY = m.y;
+      }
+      return records;
+    },
+    computeExtents(flat) {
+      let minX = 0, maxX = 0, minY = 0, maxY = 0;
+      let started = false;
+      for (const s of flat) {
+        if (s.type === SP.Const.STITCH_TYPE.END ||
+            s.type === SP.Const.STITCH_TYPE.COLOR_CHANGE) continue;
+        const m = SP.Hoop.mmToMachine({ xMm: s.xMm, yMm: s.yMm });
+        if (!started) {
+          minX = maxX = m.x; minY = maxY = m.y; started = true;
+        } else {
+          if (m.x < minX) minX = m.x;
+          if (m.x > maxX) maxX = m.x;
+          if (m.y < minY) minY = m.y;
+          if (m.y > maxY) maxY = m.y;
+        }
+      }
+      return { minX, maxX, minY, maxY };
+    },
+  };
+})();
+
+// ============================================================
+// === Background ===
+// ============================================================
+SP.Background = (() => {
+  const state = {
+    bitmap: null, naturalW: 0, naturalH: 0,
+    xMm: 0, yMm: 0, scaleMmPerPx: 0.5,
+    rotationDeg: 0, mirrorX: false, mirrorY: false,
+    opacity: 0.5, visible: true,
+  };
+  const listeners = [];
+  const notify = () => listeners.forEach((f) => f());
+  return {
+    onChange(fn) { listeners.push(fn); },
+    async loadFromFile(file) {
+      let bitmap;
+      try {
+        bitmap = await createImageBitmap(file);
+      } catch (_) {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        await new Promise((res, rej) => {
+          img.onload = res; img.onerror = rej; img.src = url;
+        });
+        bitmap = img;
+      }
+      state.bitmap = bitmap;
+      state.naturalW = bitmap.width || bitmap.naturalWidth;
+      state.naturalH = bitmap.height || bitmap.naturalHeight;
+      const hoop = SP.Hoop.getSize();
+      const maxMm = Math.min(hoop.wMm, hoop.hMm) * 0.8;
+      const longest = Math.max(state.naturalW, state.naturalH);
+      state.scaleMmPerPx = longest ? maxMm / longest : 0.5;
+      state.xMm = 0; state.yMm = 0; state.rotationDeg = 0;
+      state.mirrorX = false; state.mirrorY = false; state.visible = true;
+      notify();
+    },
+    getState() { return Object.assign({}, state); },
+    setTransform(t) {
+      if (t.xMm !== undefined) state.xMm = t.xMm;
+      if (t.yMm !== undefined) state.yMm = t.yMm;
+      if (t.scaleMmPerPx !== undefined && t.scaleMmPerPx > 0) state.scaleMmPerPx = t.scaleMmPerPx;
+      if (t.rotationDeg !== undefined) state.rotationDeg = t.rotationDeg;
+      if (t.mirrorX !== undefined) state.mirrorX = !!t.mirrorX;
+      if (t.mirrorY !== undefined) state.mirrorY = !!t.mirrorY;
+      notify();
+    },
+    setOpacity(o) { state.opacity = Math.max(0, Math.min(1, o)); notify(); },
+    setVisible(v) { state.visible = !!v; notify(); },
+    clear() { state.bitmap = null; notify(); },
+    serialize() {
+      const { bitmap, ...rest } = state;
+      return rest;
+    },
+    deserialize(s) {
+      if (!s) return;
+      Object.keys(state).forEach((k) => {
+        if (k !== "bitmap" && s[k] !== undefined) state[k] = s[k];
+      });
+      state.bitmap = null;
+    },
+  };
+})();
+
+// ============================================================
+// === Font (Hershey-Strichfont) ===
+// ============================================================
+SP.Font = (() => {
+  // Hershey-inspirierter Strichfont. Public-Domain-Konvention: jede Glyphe
+  // wird als Folge von Strichen kodiert. Koordinaten: Ursprung am
+  // Buchstabenanfang auf der Grundlinie, Y zeigt nach OBEN, Cap-Höhe = 14.
+  // Format pro Buchstabe: [width, [stroke1, stroke2, ...]] wobei jeder
+  // Stroke ein flaches Array aus alternierenden x,y-Werten ist.
+  const G = {
+    " ": [8, []],
+    "A": [14, [[1,0,7,14,13,0], [3,5,11,5]]],
+    "B": [11, [[1,0,1,14], [1,14,7,14,10,12,10,10,8,8,1,8], [1,8,8,8,11,6,11,2,8,0,1,0]]],
+    "C": [12, [[11,12,10,13,7,14,4,14,1,12,1,2,4,0,7,0,10,1,11,2]]],
+    "D": [12, [[1,0,1,14], [1,14,7,14,10,12,11,9,11,5,10,2,7,0,1,0]]],
+    "E": [10, [[1,0,1,14], [1,14,9,14], [1,7,7,7], [1,0,9,0]]],
+    "F": [10, [[1,0,1,14], [1,14,9,14], [1,7,7,7]]],
+    "G": [12, [[11,12,10,13,7,14,4,14,1,12,1,2,4,0,7,0,10,1,11,2,11,6,7,6]]],
+    "H": [12, [[1,0,1,14], [11,0,11,14], [1,7,11,7]]],
+    "I": [4, [[2,0,2,14]]],
+    "J": [9, [[7,14,7,3,6,1,4,0,2,1,1,3]]],
+    "K": [12, [[1,0,1,14], [11,14,1,7], [4,9,11,0]]],
+    "L": [9, [[1,0,1,14], [1,0,8,0]]],
+    "M": [14, [[1,0,1,14,7,5,13,14,13,0]]],
+    "N": [12, [[1,0,1,14,11,0,11,14]]],
+    "O": [12, [[6,14,3,13,1,11,1,3,3,1,6,0,9,1,11,3,11,11,9,13,6,14]]],
+    "P": [10, [[1,0,1,14], [1,14,7,14,9,13,10,11,9,9,7,8,1,8]]],
+    "Q": [12, [[6,14,3,13,1,11,1,3,3,1,6,0,9,1,11,3,11,11,9,13,6,14], [7,3,12,-3]]],
+    "R": [11, [[1,0,1,14], [1,14,7,14,9,13,10,11,9,9,7,8,1,8], [6,8,11,0]]],
+    "S": [10, [[9,13,6,14,3,14,1,12,1,11,2,9,8,7,9,5,9,2,7,0,4,0,1,1,1,2]]],
+    "T": [10, [[1,14,9,14], [5,14,5,0]]],
+    "U": [12, [[1,14,1,3,3,1,6,0,9,1,11,3,11,14]]],
+    "V": [12, [[1,14,6,0,11,14]]],
+    "W": [16, [[1,14,4,0,8,10,12,0,15,14]]],
+    "X": [12, [[1,14,11,0], [11,14,1,0]]],
+    "Y": [12, [[1,14,6,7], [11,14,6,7], [6,7,6,0]]],
+    "Z": [10, [[1,14,9,14,1,0,9,0]]],
+    "Ä": [14, [[1,0,7,14,13,0], [3,5,11,5], [4,17,5,17], [9,17,10,17]]],
+    "Ö": [12, [[6,14,3,13,1,11,1,3,3,1,6,0,9,1,11,3,11,11,9,13,6,14], [4,17,5,17], [8,17,9,17]]],
+    "Ü": [12, [[1,14,1,3,3,1,6,0,9,1,11,3,11,14], [4,17,5,17], [8,17,9,17]]],
+    "0": [10, [[5,14,2,13,1,11,1,3,2,1,5,0,8,1,9,3,9,11,8,13,5,14]]],
+    "1": [7, [[2,12,4,14,4,0], [2,0,6,0]]],
+    "2": [10, [[1,12,2,13,4,14,7,14,9,13,9,11,8,9,1,2,1,0,9,0]]],
+    "3": [10, [[1,13,4,14,7,14,9,12,9,10,7,8,4,8], [4,8,7,8,9,6,9,3,7,0,4,0,1,1]]],
+    "4": [10, [[7,0,7,14,1,4,9,4]]],
+    "5": [10, [[8,14,2,14,1,8,4,9,7,9,9,7,9,3,7,0,4,0,1,1]]],
+    "6": [10, [[9,12,7,14,4,14,2,12,1,9,1,3,2,1,5,0,7,1,9,3,9,5,7,7,4,7,1,5]]],
+    "7": [10, [[1,14,9,14,4,0]]],
+    "8": [10, [[4,14,2,13,1,11,2,9,5,7,8,9,9,11,8,13,6,14,4,14], [5,7,2,6,1,3,2,1,5,0,8,1,9,3,8,6,5,7]]],
+    "9": [10, [[9,9,7,7,5,7,2,9,1,11,2,13,5,14,7,14,9,12,9,5,7,1,4,0,2,1]]],
+    ".": [4, [[2,0,2,1]]],
+    ",": [4, [[2,1,2,0,0,-2]]],
+    "!": [4, [[2,14,2,4], [2,0,2,1]]],
+    "?": [9, [[1,12,2,13,5,14,7,13,8,11,7,9,5,8,5,5], [5,0,5,1]]],
+    "-": [10, [[1,7,9,7]]],
+    "'": [4, [[2,14,2,10]]],
+    ":": [4, [[2,10,2,11], [2,3,2,4]]],
+    "/": [8, [[1,0,7,14]]],
+    "(": [5, [[4,14,2,11,2,3,4,0]]],
+    ")": [5, [[1,14,3,11,3,3,1,0]]],
+  };
+  // Cap-Höhe in Hershey-Einheiten
+  const CAP_H = 14;
+  const SPACE_EXTRA_MM = 1.2; // zusätzlicher Abstand zwischen Buchstaben
+  const ITALIC_SHEAR = 0.22; // Scherung pro Höheneinheit für Italic
+  const SCRIPT_SHEAR = 0.32; // Stärkere Scherung für Schnürchenschrift
+  const BOLD_OFFSET = 0.55;  // Triplex-Versatz in Hershey-Einheiten
+
+  function glyph(ch) {
+    return G[ch] || G[ch.toUpperCase()] || G[" "];
+  }
+  // Misst die Gesamtbreite (in mm) des Textes bei gegebener Schrifthöhe.
+  function measureText(text, heightMm) {
+    const scale = heightMm / CAP_H;
+    let w = 0;
+    for (let i = 0; i < text.length; i++) {
+      const g = glyph(text[i]);
+      w += g[0] * scale;
+      if (i < text.length - 1) w += SPACE_EXTRA_MM;
+    }
+    return w;
+  }
+
+  // --- Stroke-Transformationen für Schriftstil-Varianten ---
+  // Italic: x' = x + shear * y (y zeigt nach oben → schräg rechts oben)
+  function shearStroke(stroke, shear) {
+    const out = new Array(stroke.length);
+    for (let k = 0; k < stroke.length; k += 2) {
+      out[k] = stroke[k] + shear * stroke[k + 1];
+      out[k + 1] = stroke[k + 1];
+    }
+    return out;
+  }
+  function italicizeStroke(stroke) {
+    return shearStroke(stroke, ITALIC_SHEAR);
+  }
+  // Erzeugt N parallel verschobene Versionen eines Strokes, verteilt von
+  // -halfWidth bis +halfWidth senkrecht zur lokalen Tangentenrichtung.
+  // Funktioniert für N=1 (identisch), N=3 (Triplex), N=5 (extra-fett) usw.
+  function multiplyStroke(stroke, count, halfWidth) {
+    const n = stroke.length / 2;
+    if (n < 2 || count < 1) return [stroke.slice()];
+    if (count === 1) return [stroke.slice()];
+    // Tangenten pro Punkt (Mittel aus ein- und ausgehendem Segment).
+    const tx = new Float64Array(n), ty = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      let dx = 0, dy = 0;
+      if (i > 0) {
+        const ax = stroke[(i - 1) * 2], ay = stroke[(i - 1) * 2 + 1];
+        const bx = stroke[i * 2], by = stroke[i * 2 + 1];
+        const L = Math.hypot(bx - ax, by - ay);
+        if (L > 0) { dx += (bx - ax) / L; dy += (by - ay) / L; }
+      }
+      if (i < n - 1) {
+        const ax = stroke[i * 2], ay = stroke[i * 2 + 1];
+        const bx = stroke[(i + 1) * 2], by = stroke[(i + 1) * 2 + 1];
+        const L = Math.hypot(bx - ax, by - ay);
+        if (L > 0) { dx += (bx - ax) / L; dy += (by - ay) / L; }
+      }
+      const L = Math.hypot(dx, dy);
+      if (L > 0) { tx[i] = dx / L; ty[i] = dy / L; }
+      else { tx[i] = 1; ty[i] = 0; }
+    }
+    const results = [];
+    for (let r = 0; r < count; r++) {
+      const t = (r / (count - 1)) * 2 - 1; // -1 .. +1
+      const off = halfWidth * t;
+      const out = new Array(stroke.length);
+      for (let i = 0; i < n; i++) {
+        out[i * 2] = stroke[i * 2] + (-ty[i]) * off;
+        out[i * 2 + 1] = stroke[i * 2 + 1] + (tx[i]) * off;
+      }
+      results.push(out);
+    }
+    return results;
+  }
+
+  // Wandelt einen Glyphen-Eintrag in die Liste der Strokes der Variante um.
+  // Drei Varianten:
+  //   "standard"  – aufrechte Druckbuchstaben (Hershey Simplex pur)
+  //   "italic"    – Druckbuchstaben um ITALIC_SHEAR nach rechts geneigt
+  //   "script"    – Schnürchenschrift: stärkere Neigung + die Wort-internen
+  //                 Buchstaben werden im renderText mit Schnürchen-Bögen
+  //                 verbunden (siehe addScriptConnectors).
+  // Multiplex (Mehrfach-Stichart) wirkt weiterhin pro Stroke perpendikulär:
+  //                   Geradstich   Mehrfach   Zickzack
+  //   Standard/Italic    1            3          1 (Satin)
+  //   Script             1            3          1 (Satin)
+  function variantStrokes(g, variant, stitchType) {
+    const isItalic = variant === "italic";
+    const isScript = variant === "script";
+    // Mehrfach-Stichart: 3 lokal-parallele Linien pro Stroke
+    const count = (stitchType === "triple") ? 3 : 1;
+    const halfWidth = BOLD_OFFSET * 1.2;
+    let strokes = g[1].map((s) => s.slice());
+    if (isItalic) strokes = strokes.map(italicizeStroke);
+    else if (isScript) strokes = strokes.map((s) => shearStroke(s, SCRIPT_SHEAR));
+    if (count > 1) {
+      const expanded = [];
+      for (const s of strokes) {
+        const parallel = multiplyStroke(s, count, halfWidth);
+        for (const t of parallel) expanded.push(t);
+      }
+      strokes = expanded;
+    }
+    return strokes;
+  }
+
+  // Rendert Text zu einer Liste von Strokes (jeder Stroke = Punkte in mm).
+  // opts:
+  //   heightMm   – Cap-Höhe in mm
+  //   originXMm  – Klick-X
+  //   originYMm  – Klick-Y
+  //   anchor     – "center" zentriert horizontal & vertikal um Origin
+  //   variant    – "standard" | "italic" | "bold" | "bold-italic"
+  //   rotationDeg – Drehung um Origin in Grad
+  // Teilt einen Pfad so auf, dass kein Segment länger als maxLenMm ist.
+  // Verhindert "Long Stitches"-Warnungen bei grossen Schrifthöhen, wo
+  // einzelne Hershey-Strokes über 7 mm lang werden würden.
+  const TEXT_MAX_STITCH_MM = 5.0;
+  function subdividePath(path, maxLenMm) {
+    if (!path || path.length < 2) return path;
+    const out = [path[0]];
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1], b = path[i];
+      const dx = b.xMm - a.xMm, dy = b.yMm - a.yMm;
+      const len = Math.hypot(dx, dy);
+      if (len > maxLenMm) {
+        const steps = Math.ceil(len / maxLenMm);
+        for (let k = 1; k < steps; k++) {
+          const t = k / steps;
+          out.push({ xMm: a.xMm + dx * t, yMm: a.yMm + dy * t });
+        }
+      }
+      out.push(b);
+    }
+    return out;
+  }
+
+  function renderText(text, opts) {
+    opts = opts || {};
+    const heightMm = (typeof opts.heightMm === "number") ? opts.heightMm : 10;
+    const anchor = opts.anchor || "center";
+    const originX = (typeof opts.originXMm === "number") ? opts.originXMm : 0;
+    const originY = (typeof opts.originYMm === "number") ? opts.originYMm : 0;
+    const variant = opts.variant || "standard";
+    const stitchType = opts.stitchType || "running";
+    const rotationDeg = (typeof opts.rotationDeg === "number") ? opts.rotationDeg : 0;
+    const scale = heightMm / CAP_H;
+    const totalW = measureText(text, heightMm);
+    let cursorX = (anchor === "center") ? -totalW / 2 : 0;
+    const baselineY = heightMm / 2; // y nach unten in mm-Welt → baseline unter dem Klick
+    // Lokal um (0,0) rendern, dann rotieren und an originX/originY verschieben.
+    const cos = Math.cos((rotationDeg * Math.PI) / 180);
+    const sin = Math.sin((rotationDeg * Math.PI) / 180);
+    const out = [];
+    // Helfer: lokale (x, y) in mm-Welt-Koordinaten (mit Rotation um Origin)
+    const toWorld = (lx, ly) => ({
+      xMm: lx * cos - ly * sin + originX,
+      yMm: lx * sin + ly * cos + originY,
+    });
+    const isScript = variant === "script";
+    // Schnürchen-Verbindungsbogen-Höhe in mm (≈ 22 % der Schrifthöhe).
+    const arcHeightMm = heightMm * 0.22;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const g = glyph(ch);
+      const advance = g[0] * scale;
+      const strokes = variantStrokes(g, variant, stitchType);
+      for (const stroke of strokes) {
+        const path = [];
+        for (let k = 0; k < stroke.length; k += 2) {
+          const xH = stroke[k], yH = stroke[k + 1];
+          const lx = cursorX + xH * scale;
+          const ly = baselineY - yH * scale;
+          path.push(toWorld(lx, ly));
+        }
+        if (path.length >= 2) out.push(subdividePath(path, TEXT_MAX_STITCH_MM));
+      }
+      // Schnürchen-Verbindungsbogen zum nächsten Buchstaben einsetzen
+      // (nicht nach dem letzten Zeichen und nicht ums Leerzeichen herum).
+      const next = text[i + 1];
+      if (isScript && next && next !== " " && ch !== " ") {
+        const startX = cursorX + advance;
+        const endX = cursorX + advance + SPACE_EXTRA_MM;
+        // Bogen über Baseline durch 5 Punkte ≈ Sinus-Halbwelle.
+        const arc = [];
+        const N = 5;
+        for (let k = 0; k <= N; k++) {
+          const t = k / N;
+          const lx = startX + (endX - startX) * t;
+          // Sinus-Bogen: peak in der Mitte, geht über baseline (mm-Welt
+          // Y zeigt nach unten → "über baseline" = baselineY - arcHeight)
+          const ly = baselineY - Math.sin(t * Math.PI) * arcHeightMm;
+          arc.push(toWorld(lx, ly));
+        }
+        out.push(arc);
+      }
+      cursorX += advance + SPACE_EXTRA_MM;
+    }
+    return out;
+  }
+  return {
+    renderText,
+    measureText,
+    hasGlyph(ch) { return !!G[ch] || !!G[ch.toUpperCase()]; },
+  };
+})();
+
+// ============================================================
+// === PointerInput ===
+// ============================================================
+SP.PointerInput = (() => {
+  const T = SP.Const.STITCH_TYPE;
+  let canvas = null;
+  let active = true;
+  let mode = "draw";
+  let drawing = false;
+  let panning = false;
+  let imgDragging = false;
+  let imgDragStart = null;
+  let movingPath = null; // { pathId, startMm, originals, isFirst }
+  const MOVE_PICK_RADIUS_MM = 6;
+  let lastPanPx = null;
+  let lastAcceptedMm = null;
+  let minDistanceMm = SP.Const.DEFAULT_DIST_MM;
+  let jumpMode = false;
+  let activePointerId = null;
+  let lastPointerType = "mouse"; // "mouse" | "pen" | "touch" — für Pinsel-Cursor-Sichtbarkeit
+  const listeners = { stitchAdded: [], pathStart: [], pathEnd: [], cursorMove: [], clickPreview: [], clickModeChange: [], erase: [], pathPicked: [], textPlace: [] };
+  // Hit-Test-Radius (mm) für "Klick auf bestehende Stichbahn → diese aktivieren".
+  const PICK_PATH_RADIUS_MM = 2.5;
+  let erasing = false;
+  const emit = (n, d) => listeners[n].forEach((f) => f(d));
+  const getRel = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const isPanGesture = (e) => e.button === 1 || e.shiftKey || e.ctrlKey;
+
+  let pressStartPx = null;
+  let pressMoved = false;
+  let pressArcPx = 0;       // kumulierte Mausbewegung in px seit Press-Anfang
+  let lastSamplePx = null;  // letzte gesehene Pointer-Position in px (für pressArcPx)
+  let lastSampleMm = null;  // letzte gesehene Pointer-Position in mm (für arcSinceEmitMm)
+  let arcSinceEmitMm = 0;   // Pfad-Länge in mm seit letztem ausgesendeten Stich
+  let clickPathOpen = false;
+  let lastClickInfo = null; // { t, x, y } für Doppelklick-Erkennung
+
+  // Mehrfinger-Geste (iPad/Smartphone): zwei Finger gleichzeitig =
+  // Pinch-Zoom + Pan. Alle aktiven Touch/Pen-Pointer werden mitgetrackt,
+  // sobald 2 aktiv sind starten wir die Gesten-Auswertung.
+  const pointers = new Map(); // pointerId -> {x, y} in CSS-px
+  let gestureActive = false;
+  let gestureStartDist = 0;
+  let gestureStartZoom = 1;
+  let gestureStartMidMm = null;
+
+  function endClickPath() {
+    clickPathOpen = false;
+    lastAcceptedMm = null;
+    lastClickInfo = null;
+    emit("pathEnd", {});
+    emit("clickPreview", null);
+    emit("clickModeChange", false);
+  }
+
+  // --- Pinch / Two-Finger-Pan ---
+  function abortCurrentDrawAction() {
+    // Eine bereits begonnene Zeichengeste sauber abbrechen, ohne den
+    // bisher gezeichneten Pfad wegzuwerfen — nur die laufende Eingabe.
+    if (drawing) {
+      drawing = false;
+      pressStartPx = null;
+      pressMoved = false;
+      pressArcPx = 0;
+      lastSamplePx = null;
+      lastSampleMm = null;
+      arcSinceEmitMm = 0;
+      emit("clickPreview", null);
+      if (clickPathOpen) {
+        clickPathOpen = false;
+        emit("pathEnd", {});
+        emit("clickModeChange", false);
+      }
+    }
+    panning = false;
+    erasing = false;
+    movingPath = null;
+    imgDragging = false;
+    activePointerId = null;
+  }
+  function startGesture() {
+    gestureActive = true;
+    abortCurrentDrawAction();
+    const arr = Array.from(pointers.values()).slice(0, 2);
+    const p1 = arr[0], p2 = arr[1];
+    gestureStartDist = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+    gestureStartZoom = SP.Viewport.getZoom();
+    const mid0 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    gestureStartMidMm = SP.Viewport.pxToMm(mid0);
+  }
+  function handleGesture() {
+    if (!gestureActive) return;
+    const arr = Array.from(pointers.values()).slice(0, 2);
+    if (arr.length < 2) return;
+    const p1 = arr[0], p2 = arr[1];
+    const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    const factor = dist / gestureStartDist;
+    const newZoom = gestureStartZoom * factor;
+    // Zoom + Pan in einem Schritt: der Welt-Punkt unter dem Anfangs-
+    // Mittelpunkt bleibt unter dem aktuellen Finger-Mittelpunkt verankert.
+    SP.Viewport.setZoomAtAnchor(newZoom, gestureStartMidMm, mid);
+    SP.Renderer.invalidate("viewport");
+  }
+  function endGesture() {
+    gestureActive = false;
+    gestureStartDist = 0;
+    gestureStartMidMm = null;
+  }
+
+  function onDown(e) {
+    if (!active) return;
+    if (e.pointerType) lastPointerType = e.pointerType;
+
+    // Mehrfinger-Tracking für Pinch/Pan (Touch/Pen). Sobald 2+ Pointer
+    // aktiv sind, geht alles Single-Pointer-Handling in den Gesture-Modus.
+    const pRaw = getRel(e);
+    if (e.pointerType === "touch" || e.pointerType === "pen") {
+      pointers.set(e.pointerId, pRaw);
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      if (pointers.size >= 2) {
+        startGesture();
+        e.preventDefault();
+        return;
+      }
+    }
+    // Fokus von Slidern / Selects / Buttons lösen, damit Tastenkürzel
+    // (Cmd/Ctrl+Z, F) nach dem Klick auf den Canvas sofort wieder funktionieren.
+    if (document.activeElement && document.activeElement !== canvas &&
+        typeof document.activeElement.blur === "function") {
+      document.activeElement.blur();
+    }
+    const p = getRel(e);
+    if (isPanGesture(e)) {
+      panning = true; lastPanPx = p; activePointerId = e.pointerId;
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault(); return;
+    }
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
+    // (Pfad-Auto-Pick beim Klick auf bestehende Bahnen wurde entfernt —
+    // jeder Klick auf den Canvas startet eine neue Linie bzw. setzt einen
+    // neuen Stich. Bahn-Auswahl gibt es nur noch explizit über andere UI.)
+
+    // Text-Modus: Klick auf Canvas platziert den eingegebenen Text als
+    // Strich-Pfade an dieser Position.
+    if (mode === "draw" && SP.StitchModel.getCurrentStitchType() === "text") {
+      const mmPos = SP.Viewport.pxToMm(p);
+      emit("textPlace", { mm: mmPos });
+      e.preventDefault();
+      return;
+    }
+
+    if (mode === "moveImage") {
+      const bg = SP.Background.getState();
+      if (!bg.bitmap) return;
+      const startMm = SP.Viewport.pxToMm(p);
+      imgDragStart = { startMm, bgX: bg.xMm, bgY: bg.yMm };
+      imgDragging = true; activePointerId = e.pointerId;
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault(); return;
+    }
+    if (mode === "erase") {
+      const eraseMm = SP.Viewport.pxToMm(p);
+      erasing = true;
+      activePointerId = e.pointerId;
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      emit("erase", eraseMm);
+      e.preventDefault(); return;
+    }
+    if (mode === "moveStitch") {
+      const mm = SP.Viewport.pxToMm(p);
+      const found = SP.StitchModel.findNearestStitch(mm, MOVE_PICK_RADIUS_MM);
+      if (!found) { e.preventDefault(); return; }
+      const originals = SP.StitchModel.capturePathPositions(found.pathId);
+      if (!originals) { e.preventDefault(); return; }
+      movingPath = { pathId: found.pathId, startMm: mm, originals, isFirst: true };
+      activePointerId = e.pointerId;
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault(); return;
+    }
+
+    // Doppelklick im Klick-Modus → Linie beenden ohne neuen Punkt
+    if (clickPathOpen && lastClickInfo) {
+      const dt = Date.now() - lastClickInfo.t;
+      const dpx = Math.hypot(p.x - lastClickInfo.x, p.y - lastClickInfo.y);
+      if (dt < 350 && dpx < 12) {
+        endClickPath();
+        e.preventDefault();
+        return;
+      }
+    }
+
+    drawing = true;
+    pressMoved = false;
+    pressStartPx = p;
+    pressArcPx = 0;
+    lastSamplePx = p;
+    activePointerId = e.pointerId;
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    const mm = SP.Viewport.pxToMm(p);
+    if (!clickPathOpen) {
+      emit("pathStart", { mm });
+    } else if (lastAcceptedMm) {
+      // Zwischen letztem Klick und neuem Klick Stiche interpolieren,
+      // damit das Segment auch bei Klick-Linien Stichlängen-Lücken zeigt.
+      const ddx = mm.xMm - lastAcceptedMm.xMm;
+      const ddy = mm.yMm - lastAcceptedMm.yMm;
+      const dist = Math.hypot(ddx, ddy);
+      if (dist >= 2 * minDistanceMm) {
+        const steps = Math.floor(dist / minDistanceMm);
+        const ux = ddx / dist, uy = ddy / dist;
+        const startX = lastAcceptedMm.xMm, startY = lastAcceptedMm.yMm;
+        for (let i = 1; i < steps; i++) {
+          const t = i * minDistanceMm;
+          emit("stitchAdded", {
+            xMm: startX + ux * t,
+            yMm: startY + uy * t,
+            type: jumpMode ? T.JUMP : T.NORMAL,
+          });
+        }
+      }
+    }
+    emit("stitchAdded", {
+      xMm: mm.xMm, yMm: mm.yMm,
+      type: jumpMode ? T.JUMP : T.NORMAL,
+      clicked: true,
+    });
+    lastAcceptedMm = mm;
+    lastSampleMm = mm;
+    arcSinceEmitMm = 0;
+    e.preventDefault();
+  }
+  function onMove(e) {
+    if (!canvas) return;
+    if (e.pointerType) lastPointerType = e.pointerType;
+    const p = getRel(e);
+    // Mehrfinger-Tracking aktualisieren
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, p);
+    }
+    if (gestureActive) {
+      handleGesture();
+      e.preventDefault();
+      return;
+    }
+    const mm = SP.Viewport.pxToMm(p);
+    emit("cursorMove", { px: p, mm });
+    if (panning && e.pointerId === activePointerId) {
+      const dx = p.x - lastPanPx.x, dy = p.y - lastPanPx.y;
+      SP.Viewport.addPan(dx, dy);
+      lastPanPx = p;
+      SP.Renderer.invalidate("viewport");
+      e.preventDefault(); return;
+    }
+    if (imgDragging && e.pointerId === activePointerId) {
+      const curMm = SP.Viewport.pxToMm(p);
+      const dx = curMm.xMm - imgDragStart.startMm.xMm;
+      const dy = curMm.yMm - imgDragStart.startMm.yMm;
+      SP.Background.setTransform({
+        xMm: imgDragStart.bgX + dx,
+        yMm: imgDragStart.bgY + dy,
+      });
+      e.preventDefault(); return;
+    }
+    if (erasing && e.pointerId === activePointerId) {
+      emit("erase", mm);
+      e.preventDefault(); return;
+    }
+    if (movingPath && e.pointerId === activePointerId) {
+      const dx = mm.xMm - movingPath.startMm.xMm;
+      const dy = mm.yMm - movingPath.startMm.yMm;
+      SP.StitchModel.setPathOffset(movingPath.pathId, movingPath.originals,
+        dx, dy, movingPath.isFirst);
+      movingPath.isFirst = false;
+      SP.Renderer.invalidate("stitches");
+      e.preventDefault(); return;
+    }
+    if (drawing && e.pointerId === activePointerId && lastAcceptedMm) {
+      // Press-Modus auf Drag wechseln, sobald die Maus mehr als 6 px Pfadlänge
+      // (kumuliert!) zurückgelegt hat. Das ist wichtig für kleines Kritzeln:
+      // bei reiner Verschiebung würden Hin- und Her-Bewegungen sich aufheben
+      // und der Drag-Modus nie starten — über die Bogenlänge gemessen
+      // erkennen wir Kritzelgesten zuverlässig.
+      if (pressStartPx && lastSamplePx) {
+        const sdx = p.x - lastSamplePx.x, sdy = p.y - lastSamplePx.y;
+        pressArcPx += Math.hypot(sdx, sdy);
+        if (pressArcPx > 6) pressMoved = true;
+      }
+      if (pressMoved && lastSampleMm) {
+        // Wir folgen dem Pfad in mm-Bogenlänge: jedes pointermove-Segment
+        // (lastSampleMm → mm) wird einzeln betrachtet. Jedes Mal, wenn die
+        // kumulierte Bogenlänge minDistanceMm überschreitet, setzen wir genau
+        // an dieser Stelle einen Stich. So produzieren auch Hin-und-Her-
+        // Bewegungen, die kürzer als die Stichlänge sind, sauber Stiche
+        // entlang der Kritzel-Bahn.
+        const segDx = mm.xMm - lastSampleMm.xMm;
+        const segDy = mm.yMm - lastSampleMm.yMm;
+        const segLen = Math.hypot(segDx, segDy);
+        if (segLen > 0) {
+          const ux = segDx / segLen, uy = segDy / segLen;
+          let pos = 0;
+          // Solange wir innerhalb dieses Segments noch einen Stich erreichen,
+          // emittieren.
+          while (arcSinceEmitMm + (segLen - pos) >= minDistanceMm - 1e-9) {
+            const need = minDistanceMm - arcSinceEmitMm;
+            pos += need;
+            const sx = lastSampleMm.xMm + ux * pos;
+            const sy = lastSampleMm.yMm + uy * pos;
+            emit("stitchAdded", {
+              xMm: sx,
+              yMm: sy,
+              type: jumpMode ? T.JUMP : T.NORMAL,
+            });
+            lastAcceptedMm = { xMm: sx, yMm: sy };
+            arcSinceEmitMm = 0;
+          }
+          arcSinceEmitMm += (segLen - pos);
+        }
+      }
+      lastSamplePx = p;
+      lastSampleMm = mm;
+      // Während des Drags die Vorschaulinie vom letzten Stich zur Maus anzeigen.
+      emit("clickPreview", { from: lastAcceptedMm, to: mm });
+      e.preventDefault();
+      return;
+    }
+
+    // Klick-Modus aktiv und kein Press: Vorschau-Gummiband zur Maus
+    if (clickPathOpen && lastAcceptedMm) {
+      emit("clickPreview", { from: lastAcceptedMm, to: mm });
+    }
+  }
+  function onUp(e) {
+    // Pointer aus dem Mehrfinger-Tracking entfernen
+    if (pointers.has(e.pointerId)) {
+      pointers.delete(e.pointerId);
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    if (gestureActive) {
+      // Erst wenn weniger als 2 Finger übrig sind, Geste beenden.
+      if (pointers.size < 2) endGesture();
+      // Solange noch ein Finger übrig ist, NICHTS in den Zeichenmodus
+      // zurückfallen lassen — der verbleibende Finger soll nicht
+      // versehentlich eine Zeichengeste auslösen. Erst beim Lifting des
+      // letzten Fingers ist die Geste komplett vorbei.
+      if (pointers.size === 0) endGesture();
+      return;
+    }
+    if (e.pointerId !== activePointerId) return;
+    if (panning) { panning = false; lastPanPx = null; }
+    else if (imgDragging) { imgDragging = false; imgDragStart = null; }
+    else if (erasing) { erasing = false; }
+    else if (movingPath) {
+      movingPath = null;
+      SP.Persistence.autoSave();
+    }
+    else if (drawing) {
+      drawing = false;
+      if (pressMoved) {
+        // War ein Drag → Linie schliessen
+        const wasOpen = clickPathOpen;
+        clickPathOpen = false;
+        lastAcceptedMm = null;
+        lastClickInfo = null;
+        emit("pathEnd", {});
+        emit("clickPreview", null);
+        if (wasOpen) emit("clickModeChange", false);
+      } else {
+        // War ein reiner Klick → Linie bleibt offen für weitere Klicks
+        const wasOpen = clickPathOpen;
+        clickPathOpen = true;
+        lastClickInfo = pressStartPx
+          ? { t: Date.now(), x: pressStartPx.x, y: pressStartPx.y }
+          : null;
+        if (!wasOpen) emit("clickModeChange", true);
+      }
+      pressStartPx = null;
+      pressMoved = false;
+      pressArcPx = 0;
+      lastSamplePx = null;
+      lastSampleMm = null;
+      arcSinceEmitMm = 0;
+    }
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    activePointerId = null;
+  }
+  function onWheel(e) {
+    e.preventDefault();
+    // Trackpad-Pinch sendet ctrlKey=true, klassisches Mausrad hat deltaMode > 0.
+    // Beides → Zoom. Trackpad-Two-Finger-Swipe (deltaMode 0, kein ctrlKey) → Pan.
+    if (e.ctrlKey || e.metaKey || e.deltaMode !== 0) {
+      const p = getRel(e);
+      const factor = Math.exp(-e.deltaY * 0.005);
+      SP.Viewport.setZoom(SP.Viewport.getZoom() * factor, p);
+    } else {
+      SP.Viewport.addPan(-e.deltaX, -e.deltaY);
+    }
+    SP.Renderer.invalidate("viewport");
+  }
+  return {
+    attach(c) {
+      canvas = c;
+      c.addEventListener("pointerdown", onDown);
+      c.addEventListener("pointermove", onMove);
+      c.addEventListener("pointerup", onUp);
+      c.addEventListener("pointercancel", onUp);
+      c.addEventListener("pointerleave", (e) => {
+        // Pinsel-/Eraser-Cursor ausblenden, sobald die Maus den Canvas verlässt.
+        try { SP.Renderer.setCursorMm(null); } catch (_) {}
+        try { SP.Renderer.setEraserCursor(null); } catch (_) {}
+      });
+      c.addEventListener("wheel", onWheel, { passive: false });
+      c.addEventListener("contextmenu", (e) => e.preventDefault());
+      document.addEventListener("keydown", (e) => {
+        if ((e.key === "Escape" || e.key === "Enter") && clickPathOpen) {
+          endClickPath();
+          e.preventDefault();
+        }
+      });
+    },
+    setMinDistanceMm(d) {
+      const minD = (SP.Const && SP.Const.MIN_DIST_MM_ABS) || 0.1;
+      const maxD = (SP.Const && SP.Const.MAX_DIST_MM) || 7;
+      const v = parseFloat(d);
+      minDistanceMm = isNaN(v) ? 0.3 : Math.min(maxD, Math.max(minD, v));
+    },
+    getMinDistanceMm() { return minDistanceMm; },
+    setJumpMode(b) { jumpMode = !!b; },
+    getJumpMode() { return jumpMode; },
+    setMode(m) {
+      mode = (m === "moveImage" || m === "erase" || m === "moveStitch") ? m : "draw";
+      drawing = false; lastAcceptedMm = null;
+      lastSamplePx = null; lastSampleMm = null;
+      arcSinceEmitMm = 0; pressArcPx = 0;
+      imgDragging = false; imgDragStart = null;
+      erasing = false;
+      movingPath = null;
+      if (clickPathOpen) {
+        clickPathOpen = false;
+        lastClickInfo = null;
+        emit("pathEnd", {});
+        emit("clickPreview", null);
+        emit("clickModeChange", false);
+      }
+    },
+    getMode() { return mode; },
+    getLastPointerType() { return lastPointerType; },
+    setActive(b) { active = !!b; },
+    on(name, fn) { (listeners[name] = listeners[name] || []).push(fn); },
+  };
+})();
+
+// ============================================================
+// === Renderer ===
+// ============================================================
+SP.Renderer = (() => {
+  let bgC, stC, lvC;
+  let bg, st, lv;
+  const dirty = { bg: true, st: true, lv: true };
+  let raf = null;
+  let showGrid = true;
+  // Sprünge zwischen Pfaden bleiben in der DST/EXP-Ausgabe als JUMP-Stiche
+  // erhalten — die Maschine fährt mit dem Faden in der Luft. Auf der
+  // Zeichenfläche sind sie standardmässig unsichtbar, damit mehrere
+  // Stickbahnen optisch getrennt wirken.
+  let showJumps = false;
+  let cursorMm = null;
+  let clickPreview = null;
+  let eraserCursor = null;
+  let textPreviewProvider = null;
+
+  const ensureRaf = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => { raf = null; render(); });
+  };
+  const baseTransform = (ctx) => {
+    const dpr = SP.Viewport.getDpr();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  const clearLayer = (ctx, c) => {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, c.width, c.height);
+  };
+
+  function roundedRectPath(ctx, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+    ctx.beginPath();
+    if (r === 0) {
+      ctx.rect(x, y, w, h);
+      return;
+    }
+    // Echte Kreisbögen, damit r = w/2 oder h/2 zu sauberen Halbkreisen führt (Stadionform).
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arc(x + w - r, y + r, r, -Math.PI / 2, 0);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arc(x + w - r, y + h - r, r, 0, Math.PI / 2);
+    ctx.lineTo(x + r, y + h);
+    ctx.arc(x + r, y + h - r, r, Math.PI / 2, Math.PI);
+    ctx.lineTo(x, y + r);
+    ctx.arc(x + r, y + r, r, Math.PI, 3 * Math.PI / 2);
+    ctx.closePath();
+  }
+  function drawHoopAndGrid() {
+    clearLayer(bg, bgC);
+    baseTransform(bg);
+    const hoop = SP.Hoop.getSize();
+    const radiusMm = SP.Hoop.getCornerRadiusMm();
+    const tl = SP.Viewport.mmToPx({ xMm: -hoop.wMm / 2, yMm: -hoop.hMm / 2 });
+    const br = SP.Viewport.mmToPx({ xMm: hoop.wMm / 2, yMm: hoop.hMm / 2 });
+    const ePx = SP.Viewport.getEffectivePxPerMm();
+    const radiusPx = radiusMm * ePx;
+    bg.fillStyle = SP.Fabric.getColor();
+    if (radiusPx > 0) {
+      roundedRectPath(bg, tl.x, tl.y, br.x - tl.x, br.y - tl.y, radiusPx);
+      bg.fill();
+    } else {
+      bg.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+    }
+
+    if (showGrid) {
+      const e = SP.Viewport.getEffectivePxPerMm();
+      let step = 10;
+      if (e * step < 6) step = 50;
+      if (e * step >= 6) {
+        bg.strokeStyle = "#e2e2dc";
+        bg.lineWidth = 0.5;
+        bg.beginPath();
+        for (let x = -hoop.wMm / 2; x <= hoop.wMm / 2 + 0.001; x += step) {
+          const a = SP.Viewport.mmToPx({ xMm: x, yMm: -hoop.hMm / 2 });
+          const b = SP.Viewport.mmToPx({ xMm: x, yMm: hoop.hMm / 2 });
+          bg.moveTo(a.x, a.y); bg.lineTo(b.x, b.y);
+        }
+        for (let y = -hoop.hMm / 2; y <= hoop.hMm / 2 + 0.001; y += step) {
+          const a = SP.Viewport.mmToPx({ xMm: -hoop.wMm / 2, yMm: y });
+          const b = SP.Viewport.mmToPx({ xMm: hoop.wMm / 2, yMm: y });
+          bg.moveTo(a.x, a.y); bg.lineTo(b.x, b.y);
+        }
+        bg.stroke();
+      }
+    }
+
+    const bgs = SP.Background.getState();
+    if (bgs.bitmap && bgs.visible) {
+      bg.save();
+      bg.globalAlpha = bgs.opacity;
+      const e = SP.Viewport.getEffectivePxPerMm();
+      const center = SP.Viewport.mmToPx({ xMm: bgs.xMm, yMm: bgs.yMm });
+      bg.translate(center.x, center.y);
+      bg.rotate((bgs.rotationDeg * Math.PI) / 180);
+      const sx = (bgs.mirrorX ? -1 : 1) * bgs.scaleMmPerPx * e;
+      const sy = (bgs.mirrorY ? -1 : 1) * bgs.scaleMmPerPx * e;
+      bg.scale(sx, sy);
+      try {
+        bg.drawImage(bgs.bitmap, -bgs.naturalW / 2, -bgs.naturalH / 2);
+      } catch (_) {}
+      bg.restore();
+    }
+
+    bg.strokeStyle = "#888";
+    bg.lineWidth = 1;
+    if (radiusPx > 0) {
+      roundedRectPath(bg, tl.x, tl.y, br.x - tl.x, br.y - tl.y, radiusPx);
+      bg.stroke();
+    } else {
+      bg.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+    }
+    const c0 = SP.Viewport.mmToPx({ xMm: 0, yMm: 0 });
+    bg.strokeStyle = "#aa3333";
+    bg.lineWidth = 1;
+    bg.beginPath();
+    bg.moveTo(c0.x - 8, c0.y); bg.lineTo(c0.x + 8, c0.y);
+    bg.moveTo(c0.x, c0.y - 8); bg.lineTo(c0.x, c0.y + 8);
+    bg.stroke();
+
+    // "1 cm"-Beschriftung im unteren linken 10-mm-Rasterfeld: so gross
+    // skaliert, dass der Text gerade in die Feldbreite passt, und ans
+    // untere Ende des Rasterfelds gesetzt.
+    if (showGrid) {
+      const ePx = SP.Viewport.getEffectivePxPerMm();
+      const cellPx = ePx * 10;
+      if (cellPx >= 14) {
+        const fontStack = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        // Bei 10 px die tatsächliche Textbreite messen, dann Schriftgrösse
+        // proportional skalieren, sodass der Text die Feldbreite minus
+        // kleinem Rand (~10 %) einnimmt.
+        bg.font = "10px " + fontStack;
+        const baseW = bg.measureText("1 cm").width || 1;
+        const targetW = cellPx * 0.9;
+        let fontSize = 10 * (targetW / baseW);
+        // Höhe darf das Feld nicht überschreiten.
+        fontSize = Math.min(fontSize, cellPx * 0.85);
+        bg.font = fontSize.toFixed(1) + "px " + fontStack;
+        const centerX = SP.Viewport.mmToPx({
+          xMm: -hoop.wMm / 2 + 5,
+          yMm: 0,
+        }).x;
+        const bottomY = SP.Viewport.mmToPx({
+          xMm: 0,
+          yMm: hoop.hMm / 2,
+        }).y - Math.max(2, cellPx * 0.06);
+        bg.fillStyle = "rgba(40, 30, 20, .55)";
+        bg.textAlign = "center";
+        bg.textBaseline = "alphabetic";
+        bg.fillText("1 cm", centerX, bottomY);
+      }
+    }
+  }
+
+  function shade(hex, amt) {
+    if (typeof hex !== "string") return hex;
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+    if (!m) return hex;
+    let r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+    if (amt < 0) {
+      const f = Math.max(0, 1 + amt);
+      r = Math.round(r * f); g = Math.round(g * f); b = Math.round(b * f);
+    } else {
+      r = Math.round(r + (255 - r) * amt);
+      g = Math.round(g + (255 - g) * amt);
+      b = Math.round(b + (255 - b) * amt);
+    }
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
+
+  function drawPath(ctx, path, color, isLive) {
+    if (path.stitches.length === 0) return;
+    const T = SP.Const.STITCH_TYPE;
+    const stitchType = path.stitchType || "running";
+    const lwMm = (typeof path.lineWidthMm === "number")
+      ? path.lineWidthMm : SP.StitchModel.getLineWidthMm();
+    const mc = (typeof path.multiCount === "number")
+      ? path.multiCount : SP.StitchModel.getMultiCount();
+    const dist = (typeof path.stitchDistMm === "number")
+      ? path.stitchDistMm
+      : (SP.PointerInput && SP.PointerInput.getMinDistanceMm
+          ? SP.PointerInput.getMinDistanceMm() : 1.0);
+    const expanded = SP.PathOps.expandPath(path.stitches, {
+      stitchType, lineWidthMm: lwMm, multiCount: mc, stitchDistMm: dist,
+      smoothFrozen: !!path.smoothFrozen,
+      parallelAxis: path.parallelAxis || null,
+    });
+    if (expanded.length === 0) return;
+
+    const ePx = SP.Viewport.getEffectivePxPerMm();
+    const strokeMm = 0.054;
+    const lwPx = Math.max(0.21, strokeMm * ePx);
+    // Lücke = 10 % der Stichlänge (5 % an jedem Ende des Segments).
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lwPx;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    ctx.setLineDash([]);
+
+    ctx.beginPath();
+    for (let i = 0; i < expanded.length - 1; i++) {
+      const a = expanded[i];
+      const b = expanded[i + 1];
+      if (b.type === T.JUMP) continue;
+      const ap = SP.Viewport.mmToPx({ xMm: a.xMm, yMm: a.yMm });
+      const bp = SP.Viewport.mmToPx({ xMm: b.xMm, yMm: b.yMm });
+      const dx = bp.x - ap.x, dy = bp.y - ap.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1) continue;
+      // An Klick-Punkten (Ecken) und an Long-Stitch-Split-Punkten innerhalb
+      // einer Zickzack-Diagonale keine Lücke setzen — sonst stapeln sich
+      // zwei Lücken am gleichen Punkt und erzeugen eine sichtbare weisse
+      // Linie (besonders auf der Satin-Mittellinie).
+      const shrinkA = (a.clicked || a.split) ? 0 : len * 0.05;
+      const shrinkB = (b.clicked || b.split) ? 0 : len * 0.05;
+      const ux = dx / len, uy = dy / len;
+      ctx.moveTo(ap.x + ux * shrinkA, ap.y + uy * shrinkA);
+      ctx.lineTo(bp.x - ux * shrinkB, bp.y - uy * shrinkB);
+    }
+    ctx.stroke();
+
+    if (showJumps) {
+      ctx.strokeStyle = "#e08020";
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      for (let i = 1; i < expanded.length; i++) {
+        const s = expanded[i];
+        if (s.type !== T.JUMP) continue;
+        const sp = expanded[i - 1];
+        const a = SP.Viewport.mmToPx({ xMm: sp.xMm, yMm: sp.yMm });
+        const b = SP.Viewport.mmToPx({ xMm: s.xMm, yMm: s.yMm });
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Stichgrenzen sind als Lücken im Faden sichtbar – keine zusätzlichen Punkte.
+  }
+
+  function drawStitches() {
+    clearLayer(st, stC);
+    baseTransform(st);
+    const palette = SP.StitchModel.getPalette();
+    for (const path of SP.StitchModel.iteratePaths()) {
+      drawPath(st, path, palette[path.colorIndex] || "#1f1f1f", false);
+    }
+  }
+
+  function drawLive() {
+    clearLayer(lv, lvC);
+    baseTransform(lv);
+    if (clickPreview && clickPreview.from && clickPreview.to) {
+      const a = SP.Viewport.mmToPx(clickPreview.from);
+      const b = SP.Viewport.mmToPx(clickPreview.to);
+      lv.strokeStyle = "rgba(58, 109, 110, .7)";
+      lv.lineWidth = 1;
+      lv.setLineDash([5, 4]);
+      lv.beginPath();
+      lv.moveTo(a.x, a.y);
+      lv.lineTo(b.x, b.y);
+      lv.stroke();
+      lv.setLineDash([]);
+    }
+    if (eraserCursor && eraserCursor.mm) {
+      const px = SP.Viewport.mmToPx(eraserCursor.mm);
+      const radiusPx = (eraserCursor.radiusMm || 4) * SP.Viewport.getEffectivePxPerMm();
+      lv.fillStyle = "rgba(154, 63, 51, .12)";
+      lv.beginPath();
+      lv.arc(px.x, px.y, radiusPx, 0, Math.PI * 2);
+      lv.fill();
+      lv.strokeStyle = "rgba(154, 63, 51, .85)";
+      lv.lineWidth = 1.5;
+      lv.stroke();
+      // Fadenkreuz im Zentrum
+      lv.beginPath();
+      lv.moveTo(px.x - 4, px.y); lv.lineTo(px.x + 4, px.y);
+      lv.moveTo(px.x, px.y - 4); lv.lineTo(px.x, px.y + 4);
+      lv.lineWidth = 1;
+      lv.stroke();
+    }
+
+    // Pinsel-Cursor: zeigt für Zickzack/Satin und Mehrfach den Stich-
+    // durchmesser (= Linienbreite) als Kreis am Mauspunkt an, damit man
+    // visuell weiss, wie breit der Faden gezeichnet wird. Bei Touch-Eingabe
+    // (Finger sichtbar) entfällt der Pinsel.
+    const ptype = (SP.PointerInput && SP.PointerInput.getLastPointerType)
+      ? SP.PointerInput.getLastPointerType() : "mouse";
+    const curType = (SP.StitchModel && SP.StitchModel.getCurrentStitchType)
+      ? SP.StitchModel.getCurrentStitchType() : null;
+    if (
+      cursorMm &&
+      ptype !== "touch" &&
+      SP.PointerInput &&
+      SP.PointerInput.getMode &&
+      SP.PointerInput.getMode() === "draw" &&
+      (curType === "zigzag" || curType === "triple")
+    ) {
+      const px = SP.Viewport.mmToPx(cursorMm);
+      const lwMm = SP.StitchModel.getLineWidthMm
+        ? SP.StitchModel.getLineWidthMm() : 2;
+      const radiusPx = (lwMm / 2) * SP.Viewport.getEffectivePxPerMm();
+      if (radiusPx >= 1) {
+        const palette = SP.StitchModel.getPalette
+          ? SP.StitchModel.getPalette() : [];
+        const ci = SP.StitchModel.getCurrentColorIndex
+          ? SP.StitchModel.getCurrentColorIndex() : 0;
+        const col = palette[ci] || "#3a6d6e";
+        // Halbtransparente Fadenfarbe als Füllung – "Pinselabdruck"
+        const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(col);
+        let fill = "rgba(58, 109, 110, .14)";
+        if (m) {
+          const r = parseInt(m[1], 16),
+            g = parseInt(m[2], 16),
+            b = parseInt(m[3], 16);
+          fill = "rgba(" + r + "," + g + "," + b + ",.18)";
+        }
+        lv.fillStyle = fill;
+        lv.beginPath();
+        lv.arc(px.x, px.y, radiusPx, 0, Math.PI * 2);
+        lv.fill();
+        lv.strokeStyle = "rgba(30, 30, 30, .55)";
+        lv.lineWidth = 1;
+        lv.setLineDash([3, 2]);
+        lv.stroke();
+        lv.setLineDash([]);
+        // Mittelpunkt-Marker (kleines Kreuz), damit klar ist, wo die
+        // Stich-Mittellinie verlaufen wird.
+        lv.strokeStyle = "rgba(30, 30, 30, .7)";
+        lv.lineWidth = 1;
+        lv.beginPath();
+        lv.moveTo(px.x - 3, px.y); lv.lineTo(px.x + 3, px.y);
+        lv.moveTo(px.x, px.y - 3); lv.lineTo(px.x, px.y + 3);
+        lv.stroke();
+      }
+    }
+
+    // Text-Vorschau: zeigt — wenn der Text-Modus aktiv ist und der Cursor
+    // auf dem Canvas ist — den eingegebenen Text als blasse Geistschrift
+    // an der Cursorposition, mit aktueller Schriftvariante und Drehung.
+    if (cursorMm && textPreviewProvider && SP.Font && SP.Font.renderText) {
+      const tp = textPreviewProvider();
+      if (tp && tp.text) {
+        const strokes = SP.Font.renderText(tp.text, {
+          heightMm: tp.heightMm,
+          originXMm: cursorMm.xMm,
+          originYMm: cursorMm.yMm,
+          anchor: "center",
+          variant: tp.variant,
+          stitchType: tp.tstype,
+          rotationDeg: tp.rotationDeg,
+        });
+        lv.strokeStyle = "rgba(58, 109, 110, .65)";
+        lv.lineWidth = (tp.tstype === "zigzag")
+          ? Math.max(2, (tp.lwMm || 1.5) * SP.Viewport.getEffectivePxPerMm())
+          : (tp.tstype === "triple" ? 2.5 : 1.6);
+        lv.lineCap = "round";
+        lv.lineJoin = "round";
+        lv.setLineDash([]);
+        for (const stroke of strokes) {
+          if (stroke.length < 2) continue;
+          lv.beginPath();
+          const a = SP.Viewport.mmToPx(stroke[0]);
+          lv.moveTo(a.x, a.y);
+          for (let i = 1; i < stroke.length; i++) {
+            const b = SP.Viewport.mmToPx(stroke[i]);
+            lv.lineTo(b.x, b.y);
+          }
+          lv.stroke();
+        }
+      }
+    }
+  }
+
+  function render() {
+    if (dirty.bg) { drawHoopAndGrid(); dirty.bg = false; }
+    if (dirty.st) { drawStitches(); dirty.st = false; }
+    if (dirty.lv) { drawLive(); dirty.lv = false; }
+  }
+
+  function applyCanvasAspect() {
+    const stack = bgC.parentElement;
+    const area = stack.parentElement;
+    if (!area) return;
+    const padCs = getComputedStyle(area);
+    const padX = parseFloat(padCs.paddingLeft) + parseFloat(padCs.paddingRight);
+    const padY = parseFloat(padCs.paddingTop) + parseFloat(padCs.paddingBottom);
+    const aw = Math.max(0, area.clientWidth - padX);
+    const ah = Math.max(0, area.clientHeight - padY);
+    if (aw <= 0 || ah <= 0) return;
+    const hoop = SP.Hoop.getSize();
+    const aspect = hoop.wMm / hoop.hMm;
+    const areaAspect = aw / ah;
+    let w, h;
+    if (areaAspect > aspect) {
+      h = ah; w = h * aspect;
+    } else {
+      w = aw; h = w / aspect;
+    }
+    stack.style.width = w + "px";
+    stack.style.height = h + "px";
+  }
+  function resize() {
+    const stack = bgC.parentElement;
+    const w = stack.clientWidth;
+    const h = stack.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    [bgC, stC, lvC].forEach((c) => {
+      c.style.width = w + "px";
+      c.style.height = h + "px";
+      c.width = Math.floor(w * dpr);
+      c.height = Math.floor(h * dpr);
+    });
+    SP.Viewport.setCanvasSize(w, h);
+    SP.Viewport.setDpr(dpr);
+    SP.Viewport.fitHoop();
+    invalidate("all");
+  }
+
+  function invalidate(reason) {
+    if (reason === "all") { dirty.bg = dirty.st = dirty.lv = true; }
+    if (reason === "background" || reason === "viewport" || reason === "hoop") dirty.bg = true;
+    if (reason === "stitches" || reason === "viewport" || reason === "hoop") dirty.st = true;
+    if (reason === "live" || reason === "viewport") dirty.lv = true;
+    ensureRaf();
+  }
+
+  return {
+    init(refs) {
+      bgC = refs.bg; stC = refs.stitch; lvC = refs.live;
+      bg = bgC.getContext("2d");
+      st = stC.getContext("2d");
+      lv = lvC.getContext("2d");
+      window.addEventListener("resize", resize);
+      resize();
+    },
+    invalidate,
+    setShowGrid(b) { showGrid = !!b; invalidate("background"); },
+    setShowJumps(b) { showJumps = !!b; invalidate("stitches"); },
+    setCursorMm(m) { cursorMm = m; invalidate("live"); },
+    setClickPreview(p) { clickPreview = p; invalidate("live"); },
+    setEraserCursor(p) { eraserCursor = p; invalidate("live"); },
+    setTextPreviewProvider(fn) { textPreviewProvider = fn; invalidate("live"); },
+    resize,
+  };
+})();
+
+// ============================================================
+// === DSTDecoder ===
+// ============================================================
+SP.DSTDecoder = (() => {
+  // Standard (pyembroidery / Tajima): bit 3 = x+81, bit 2 = x-81.
+  // Manche Encoder schreiben aber genau umgekehrt (bit 2 = x+81, bit 3 = x-81).
+  // Wir erkennen das automatisch durch Vergleich der decodierten Ausdehnung
+  // und Endposition mit den Header-Feldern.
+  function decodeRecord(b0, b1, b2, swapX81) {
+    let dx = 0, dy = 0;
+    if (b0 & 0x01) dx += 1;
+    if (b0 & 0x02) dx -= 1;
+    if (b0 & 0x04) dx += 9;
+    if (b0 & 0x08) dx -= 9;
+    if (b1 & 0x01) dx += 3;
+    if (b1 & 0x02) dx -= 3;
+    if (b1 & 0x04) dx += 27;
+    if (b1 & 0x08) dx -= 27;
+    if (swapX81) {
+      if (b2 & 0x04) dx += 81;
+      if (b2 & 0x08) dx -= 81;
+    } else {
+      if (b2 & 0x08) dx += 81;
+      if (b2 & 0x04) dx -= 81;
+    }
+    if (b0 & 0x80) dy += 1;
+    if (b0 & 0x40) dy -= 1;
+    if (b0 & 0x20) dy += 9;
+    if (b0 & 0x10) dy -= 9;
+    if (b1 & 0x80) dy += 3;
+    if (b1 & 0x40) dy -= 3;
+    if (b1 & 0x20) dy += 27;
+    if (b1 & 0x10) dy -= 27;
+    if (b2 & 0x20) dy += 81;
+    if (b2 & 0x10) dy -= 81;
+    let type = "normal";
+    if (b0 === 0x00 && b1 === 0x00 && b2 === 0xF3) type = "end";
+    else if ((b2 & 0xC0) === 0xC0) type = "color_change";
+    else if ((b2 & 0x80) === 0x80) type = "jump";
+    return { dx, dy, type };
+  }
+  function parseHeaderMetric(headerText, key) {
+    const re = new RegExp(key.replace(/[+]/g, "\\+") + ":\\s*([+-]?\\d+)");
+    const m = re.exec(headerText);
+    return m ? parseInt(m[1], 10) : null;
+  }
+  function parseHeaderMetrics(bytes) {
+    let s = "";
+    for (let i = 0; i < Math.min(bytes.length, 512); i++) {
+      s += String.fromCharCode(bytes[i]);
+    }
+    return {
+      maxX: parseHeaderMetric(s, "+X"),
+      minX: parseHeaderMetric(s, "-X"),
+      maxY: parseHeaderMetric(s, "+Y"),
+      minY: parseHeaderMetric(s, "-Y"),
+      finalX: parseHeaderMetric(s, "AX"),
+      finalY: parseHeaderMetric(s, "AY"),
+    };
+  }
+  function scanRecords(bytes, swapX81) {
+    let absX = 0, absY = 0;
+    let minX = 0, maxX = 0, minY = 0, maxY = 0;
+    for (let i = 512; i + 2 < bytes.length; i += 3) {
+      const b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2];
+      if (b0 === 0 && b1 === 0 && b2 === 0xF3) break;
+      const r = decodeRecord(b0, b1, b2, swapX81);
+      absX += r.dx;
+      absY += r.dy;
+      if (absX < minX) minX = absX;
+      if (absX > maxX) maxX = absX;
+      if (absY < minY) minY = absY;
+      if (absY > maxY) maxY = absY;
+    }
+    return { finalX: absX, finalY: absY, minX, maxX, minY, maxY };
+  }
+  function metricDiff(actual, expected) {
+    return expected === null ? 0 : Math.abs(actual - expected);
+  }
+  function scoreVariant(scan, header) {
+    let score = 0;
+    score += metricDiff(scan.finalX, header.finalX) * 4;
+    score += metricDiff(scan.finalY, header.finalY) * 4;
+    if (header.maxX !== null) score += Math.abs(scan.maxX - header.maxX);
+    if (header.minX !== null) score += Math.abs(-scan.minX - header.minX);
+    if (header.maxY !== null) score += Math.abs(scan.maxY - header.maxY);
+    if (header.minY !== null) score += Math.abs(-scan.minY - header.minY);
+    return score;
+  }
+  function shouldSwapX81(bytes) {
+    const header = parseHeaderMetrics(bytes);
+    const standard = scanRecords(bytes, false);
+    const swapped = scanRecords(bytes, true);
+    const standardScore = scoreVariant(standard, header);
+    const swappedScore = scoreVariant(swapped, header);
+    if (swappedScore + 2 < standardScore) return true;
+    if (standardScore + 2 < swappedScore) return false;
+
+    const standardWidth = standard.maxX - standard.minX;
+    const swappedWidth = swapped.maxX - swapped.minX;
+    const headerWidth = (header.maxX !== null && header.minX !== null)
+      ? header.maxX + header.minX
+      : null;
+    if (headerWidth !== null) {
+      return Math.abs(swappedWidth - headerWidth) < Math.abs(standardWidth - headerWidth);
+    }
+    return false;
+  }
+  function newPath(colorIdx) {
+    return {
+      colorIndex: colorIdx % 9,
+      stitchType: "running",
+      lineWidthMm: 2,
+      multiCount: 3,
+      stitchDistMm: 1,
+      stitches: [],
+    };
+  }
+  return {
+    decode(bytes) {
+      // Header-Ausdehnung und Endposition prüfen, um die Bit-Konvention für
+      // X +/-81 zu bestimmen. Einige DST-Dateien verwenden die Tajima-Bits
+      // 2/3 in der Gegenrichtung; dann wird das Motiv horizontal stark gedehnt.
+      const swapX81 = shouldSwapX81(bytes);
+      const start = 512;
+      const T_NORMAL = SP.Const.STITCH_TYPE.NORMAL;
+      const paths = [];
+      let cur = null;
+      let pending = null; // letzter Anker-Punkt aus aufeinanderfolgenden JUMPs
+      let absX = 0, absY = 0;
+      let colorIdx = 0;
+      for (let i = start; i + 2 < bytes.length; i += 3) {
+        const r = decodeRecord(bytes[i], bytes[i + 1], bytes[i + 2], swapX81);
+        if (r.type === "end") break;
+        absX += r.dx; absY += r.dy;
+        if (r.type === "color_change") {
+          colorIdx++;
+          cur = null;
+          pending = null;
+          continue;
+        }
+        const xMm = absX / 10, yMm = -absY / 10;
+        if (r.type === "jump") {
+          // JUMP merken, keinen Stich anlegen. Mehrere aufeinanderfolgende
+          // JUMPs (z. B. delta-gechunktete Anfahrt) überschreiben den Anker.
+          pending = { xMm, yMm };
+          cur = null;
+          continue;
+        }
+        // NORMAL-Stich
+        if (pending) {
+          cur = newPath(colorIdx);
+          cur.stitches.push({ xMm: pending.xMm, yMm: pending.yMm, type: T_NORMAL, clicked: true });
+          cur.stitches.push({ xMm, yMm, type: T_NORMAL });
+          paths.push(cur);
+          pending = null;
+        } else if (!cur) {
+          cur = newPath(colorIdx);
+          cur.stitches.push({ xMm, yMm, type: T_NORMAL, clicked: true });
+          paths.push(cur);
+        } else {
+          cur.stitches.push({ xMm, yMm, type: T_NORMAL });
+        }
+      }
+      return { paths: paths.filter((p) => p.stitches.length >= 1), swapX81 };
+    },
+  };
+})();
+
+// ============================================================
+// === EXPDecoder ===
+// ============================================================
+SP.EXPDecoder = (() => {
+  const i8 = (b) => (b > 127 ? b - 256 : b);
+  function newPath(colorIdx) {
+    return {
+      colorIndex: colorIdx % 9,
+      stitchType: "running",
+      lineWidthMm: 2,
+      multiCount: 3,
+      stitchDistMm: 1,
+      stitches: [],
+    };
+  }
+  return {
+    decode(bytes) {
+      const T_NORMAL = SP.Const.STITCH_TYPE.NORMAL;
+      const paths = [];
+      let cur = null;
+      let pending = null;
+      let absX = 0, absY = 0;
+      let colorIdx = 0;
+      let i = 0;
+      while (i + 1 < bytes.length) {
+        const b0 = bytes[i];
+        if (b0 === 0x80) {
+          const code = bytes[i + 1];
+          if (code === 0x80) break;
+          const dx = i8(bytes[i + 2] || 0);
+          const dy = i8(bytes[i + 3] || 0);
+          absX += dx; absY += dy;
+          if (code === 0x04) {
+            pending = { xMm: absX / 10, yMm: -absY / 10 };
+            cur = null;
+          } else if (code === 0x01) {
+            colorIdx++;
+            cur = null;
+            pending = null;
+          }
+          i += 4;
+        } else {
+          const dx = i8(b0);
+          const dy = i8(bytes[i + 1]);
+          absX += dx; absY += dy;
+          const xMm = absX / 10, yMm = -absY / 10;
+          if (pending) {
+            cur = newPath(colorIdx);
+            cur.stitches.push({ xMm: pending.xMm, yMm: pending.yMm, type: T_NORMAL, clicked: true });
+            cur.stitches.push({ xMm, yMm, type: T_NORMAL });
+            paths.push(cur);
+            pending = null;
+          } else if (!cur) {
+            cur = newPath(colorIdx);
+            cur.stitches.push({ xMm, yMm, type: T_NORMAL, clicked: true });
+            paths.push(cur);
+          } else {
+            cur.stitches.push({ xMm, yMm, type: T_NORMAL });
+          }
+          i += 2;
+        }
+      }
+      return paths.filter((p) => p.stitches.length >= 1);
+    },
+  };
+})();
+
+// ============================================================
+// === DSTEncoder ===
+// ============================================================
+SP.DSTEncoder = (() => {
+  const T = SP.Const.STITCH_TYPE;
+
+  function encodeStitchRecord(dx, dy, type, swapX81) {
+    let b0 = 0, b1 = 0, b2 = 0;
+    if (dy > 40)  { b2 |= 0x20; dy -= 81; }
+    if (dy < -40) { b2 |= 0x10; dy += 81; }
+    if (dy > 13)  { b1 |= 0x20; dy -= 27; }
+    if (dy < -13) { b1 |= 0x10; dy += 27; }
+    if (dy > 4)   { b0 |= 0x20; dy -= 9; }
+    if (dy < -4)  { b0 |= 0x10; dy += 9; }
+    if (dy > 1)   { b1 |= 0x80; dy -= 3; }
+    if (dy < -1)  { b1 |= 0x40; dy += 3; }
+    if (dy > 0)   { b0 |= 0x80; dy -= 1; }
+    if (dy < 0)   { b0 |= 0x40; dy += 1; }
+    // X±81 Bit-Auswahl in Byte 2: Standard = bit 3 (+81), bit 2 (-81).
+    // swapX81 invertiert das (für Encoder, die die Konvention vertauschen).
+    const bitPlus81  = swapX81 ? 0x04 : 0x08;
+    const bitMinus81 = swapX81 ? 0x08 : 0x04;
+    if (dx > 40)  { b2 |= bitPlus81;  dx -= 81; }
+    if (dx < -40) { b2 |= bitMinus81; dx += 81; }
+    if (dx > 13)  { b1 |= 0x04; dx -= 27; }
+    if (dx < -13) { b1 |= 0x08; dx += 27; }
+    if (dx > 4)   { b0 |= 0x04; dx -= 9; }
+    if (dx < -4)  { b0 |= 0x08; dx += 9; }
+    if (dx > 1)   { b1 |= 0x01; dx -= 3; }
+    if (dx < -1)  { b1 |= 0x02; dx += 3; }
+    if (dx > 0)   { b0 |= 0x01; dx -= 1; }
+    if (dx < 0)   { b0 |= 0x02; dx += 1; }
+    b2 |= 0x03;
+    if (type === T.JUMP)         b2 |= 0x80;
+    else if (type === T.COLOR_CHANGE) b2 |= 0xC0;
+    return [b0 & 0xFF, b1 & 0xFF, b2 & 0xFF];
+  }
+
+  function pad(v, n, c) {
+    let s = String(v);
+    c = c || " ";
+    while (s.length < n) s = c + s;
+    return s;
+  }
+  function unsignedField(v, digits) { return pad(Math.max(0, v | 0), digits, "0"); }
+  function signedField(v, digits) {
+    const sign = v < 0 ? "-" : "+";
+    return sign + pad(Math.abs(v | 0), digits, "0");
+  }
+
+  function buildHeader(meta, stitchCount, colorChanges, extents, endX, endY) {
+    const buf = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) buf[i] = 0x20;
+    let pos = 0;
+    const writeStr = (s) => {
+      for (let i = 0; i < s.length; i++) buf[pos++] = s.charCodeAt(i) & 0xFF;
+    };
+    let label = (meta.label || "StitchPath").slice(0, 16);
+    while (label.length < 16) label += " ";
+    writeStr("LA:" + label + "\r");
+    writeStr("ST:" + unsignedField(stitchCount, 7) + "\r");
+    writeStr("CO:" + unsignedField(colorChanges, 3) + "\r");
+    writeStr("+X:" + unsignedField(Math.max(0, extents.maxX), 5) + "\r");
+    writeStr("-X:" + unsignedField(Math.max(0, -extents.minX), 5) + "\r");
+    writeStr("+Y:" + unsignedField(Math.max(0, extents.maxY), 5) + "\r");
+    writeStr("-Y:" + unsignedField(Math.max(0, -extents.minY), 5) + "\r");
+    writeStr("AX:" + signedField(endX, 5) + "\r");
+    writeStr("AY:" + signedField(endY, 5) + "\r");
+    writeStr("MX:" + signedField(0, 5) + "\r");
+    writeStr("MY:" + signedField(0, 5) + "\r");
+    writeStr("PD:******\r");
+    buf[pos++] = 0x1A;
+    return buf;
+  }
+
+  return {
+    encode(flatStitches, meta) {
+      meta = meta || {};
+      const swapX81 = !!meta.swapX81;
+      const records = SP.PathOps.toMachineRecords(flatStitches, SP.Const.DST_DELTA_LIMIT);
+      const extents = SP.PathOps.computeExtents(flatStitches);
+      let colorChanges = 0;
+      let endX = 0, endY = 0;
+      for (const r of records) {
+        if (r.type === T.COLOR_CHANGE) colorChanges++;
+        if (r.type !== T.END && r.type !== T.COLOR_CHANGE) {
+          endX += r.dx; endY += r.dy;
+        }
+      }
+      const header = buildHeader(meta, records.length, colorChanges, extents, endX, endY);
+      const body = new Uint8Array(records.length * 3);
+      let p = 0;
+      for (const r of records) {
+        if (r.type === T.END) {
+          body[p++] = 0x00; body[p++] = 0x00; body[p++] = 0xF3;
+        } else {
+          const b = encodeStitchRecord(r.dx, r.dy, r.type, swapX81);
+          body[p++] = b[0]; body[p++] = b[1]; body[p++] = b[2];
+        }
+      }
+      const out = new Uint8Array(header.length + body.length);
+      out.set(header, 0);
+      out.set(body, header.length);
+      return out;
+    },
+  };
+})();
+
+// ============================================================
+// === EXPEncoder (Melco) ===
+// ============================================================
+SP.EXPEncoder = (() => {
+  const T = SP.Const.STITCH_TYPE;
+  const toI8 = (v) => (v < 0 ? 256 + v : v) & 0xFF;
+  return {
+    encode(flatStitches) {
+      const records = SP.PathOps.toMachineRecords(flatStitches, SP.Const.EXP_DELTA_LIMIT);
+      const out = [];
+      for (const r of records) {
+        if (r.type === T.END) {
+          out.push(0x80, 0x80, 0x00, 0x00);
+        } else if (r.type === T.JUMP) {
+          out.push(0x80, 0x04, toI8(r.dx), toI8(r.dy));
+        } else if (r.type === T.COLOR_CHANGE) {
+          out.push(0x80, 0x01, 0x00, 0x00);
+        } else {
+          out.push(toI8(r.dx), toI8(r.dy));
+        }
+      }
+      return new Uint8Array(out);
+    },
+  };
+})();
+
+// ============================================================
+// === Persistence ===
+// ============================================================
+SP.Persistence = (() => {
+  let timer = null;
+  function save() {
+    try {
+      const hoopSize = SP.Hoop.getSize();
+      const data = {
+        version: 1,
+        hoop: { wMm: hoopSize.wMm, hMm: hoopSize.hMm, rMm: SP.Hoop.getCornerRadiusMm() },
+        viewport: SP.Viewport.getState(),
+        model: SP.StitchModel.serialize(),
+        background: SP.Background.serialize(),
+        fabric: SP.Fabric.getColor(),
+      };
+      localStorage.setItem(SP.Const.STORAGE_KEY, JSON.stringify(data));
+    } catch (_) { /* quota or disabled */ }
+  }
+  return {
+    autoSave() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(save, 500);
+    },
+    saveNow: save,
+    restore() {
+      try {
+        const raw = localStorage.getItem(SP.Const.STORAGE_KEY);
+        if (!raw) return false;
+        const d = JSON.parse(raw);
+        if (d.hoop) {
+          SP.Hoop.setSize(d.hoop.wMm, d.hoop.hMm);
+          if (typeof d.hoop.rMm === "number") SP.Hoop.setCornerRadiusMm(d.hoop.rMm);
+        }
+        if (d.model) SP.StitchModel.deserialize(d.model);
+        if (d.background) SP.Background.deserialize(d.background);
+        if (d.viewport) SP.Viewport.setState(d.viewport);
+        if (d.fabric) SP.Fabric.setColor(d.fabric);
+        return true;
+      } catch (_) { return false; }
+    },
+    downloadBlob(bytes, filename, mime) {
+      const blob = new Blob([bytes], { type: mime || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    },
+    readImageFile(file) {
+      return new Promise((res, rej) => {
+        if (!file || !file.type || !/^image\/(png|jpeg|gif|bmp|webp)$/i.test(file.type)) {
+          rej(new Error("Bildtyp nicht unterstützt: " + (file && file.type)));
+          return;
+        }
+        res(file);
+      });
+    },
+  };
+})();
+
+// ============================================================
+// === UIShell ===
+// ============================================================
+SP.UIShell = (() => {
+  const $ = (id) => document.getElementById(id);
+  let suppressBgSync = false;
+  let eraserRadiusMm = 4;
+
+  let baseScale = 0;
+
+  function syncBgInputs() {
+    const b = SP.Background.getState();
+    if (!baseScale && b.scaleMmPerPx) baseScale = b.scaleMmPerPx;
+    const pct = baseScale ? Math.round((b.scaleMmPerPx / baseScale) * 100) : 100;
+    $("imgScaleDisplay").textContent = pct + " %";
+    $("imgRotDisplay").textContent = Math.round(b.rotationDeg) + "°";
+    $("imgMirX").checked = b.mirrorX;
+    $("imgMirY").checked = b.mirrorY;
+    $("opacity").value = b.opacity;
+    const lbl = $("opacityLabel");
+    if (lbl) lbl.textContent = Math.round(b.opacity * 100) + " %";
+  }
+
+  function applyMirrors() {
+    suppressBgSync = true;
+    SP.Background.setTransform({
+      mirrorX: $("imgMirX").checked,
+      mirrorY: $("imgMirY").checked,
+    });
+    suppressBgSync = false;
+  }
+  function adjustScale(factor) {
+    const cur = SP.Background.getState().scaleMmPerPx;
+    if (!cur) return;
+    SP.Background.setTransform({ scaleMmPerPx: cur * factor });
+  }
+  function adjustRot(delta) {
+    const cur = SP.Background.getState().rotationDeg;
+    SP.Background.setTransform({ rotationDeg: cur + delta });
+  }
+  function setMoveMode(on) {
+    const btn = $("btnMoveImage");
+    btn.classList.toggle("active", on);
+    if (on) deactivateOtherTools("moveImage");
+    SP.PointerInput.setMode(on ? "moveImage" : "draw");
+    document.getElementById("liveCanvas").classList.toggle("move-mode", on);
+    document.getElementById("moveBanner").classList.toggle("visible", on);
+  }
+  function setEraseMode(on) {
+    const btn = $("btnEraser");
+    if (btn) btn.classList.toggle("active", on);
+    if (on) {
+      deactivateOtherTools("erase");
+    }
+    SP.PointerInput.setMode(on ? "erase" : "draw");
+    document.getElementById("liveCanvas").classList.toggle("erase-mode", on);
+    document.getElementById("eraseBanner").classList.toggle("visible", on);
+    if (!on) SP.Renderer.setEraserCursor(null);
+  }
+  function setMoveStitchMode(on) {
+    const btn = $("btnMoveStitch");
+    if (btn) btn.classList.toggle("active", on);
+    if (on) deactivateOtherTools("moveStitch");
+    SP.PointerInput.setMode(on ? "moveStitch" : "draw");
+    document.getElementById("liveCanvas").classList.toggle("movestitch-mode", on);
+    document.getElementById("moveStitchBanner").classList.toggle("visible", on);
+  }
+  function deactivateOtherTools(except) {
+    if (except !== "moveImage") {
+      const b = $("btnMoveImage");
+      if (b && b.classList.contains("active")) {
+        b.classList.remove("active");
+        document.getElementById("liveCanvas").classList.remove("move-mode");
+        document.getElementById("moveBanner").classList.remove("visible");
+      }
+    }
+    if (except !== "erase") {
+      const b = $("btnEraser");
+      if (b && b.classList.contains("active")) {
+        b.classList.remove("active");
+        document.getElementById("liveCanvas").classList.remove("erase-mode");
+        document.getElementById("eraseBanner").classList.remove("visible");
+        SP.Renderer.setEraserCursor(null);
+      }
+    }
+    if (except !== "moveStitch") {
+      const b = $("btnMoveStitch");
+      if (b && b.classList.contains("active")) {
+        b.classList.remove("active");
+        document.getElementById("liveCanvas").classList.remove("movestitch-mode");
+        document.getElementById("moveStitchBanner").classList.remove("visible");
+      }
+    }
+  }
+  // Hit-Test für den Radierer
+  function distSqToSegment(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const L2 = dx*dx + dy*dy;
+    if (L2 === 0) {
+      const ex = px - ax, ey = py - ay;
+      return ex*ex + ey*ey;
+    }
+    let t = ((px - ax) * dx + (py - ay) * dy) / L2;
+    t = Math.max(0, Math.min(1, t));
+    const x = ax + t * dx, y = ay + t * dy;
+    const ex = px - x, ey = py - y;
+    return ex*ex + ey*ey;
+  }
+  function pathHits(path, mm, threshold) {
+    if (!path.stitches.length) return false;
+    const t2 = threshold * threshold;
+    if (path.stitches.length === 1) {
+      const s = path.stitches[0];
+      const dx = mm.xMm - s.xMm, dy = mm.yMm - s.yMm;
+      return dx*dx + dy*dy <= t2;
+    }
+    for (let i = 0; i < path.stitches.length - 1; i++) {
+      const a = path.stitches[i], b = path.stitches[i + 1];
+      if (distSqToSegment(mm.xMm, mm.yMm, a.xMm, a.yMm, b.xMm, b.yMm) <= t2) return true;
+    }
+    return false;
+  }
+
+  function refreshVorlagebar() {
+    const hasImage = !!SP.Background.getState().bitmap;
+    document.getElementById("vorlagebar").classList.toggle("visible", hasImage);
+    if (!hasImage) setMoveMode(false);
+  }
+
+  function exitEraseIfActive() {
+    const btn = $("btnEraser");
+    if (btn && btn.classList.contains("active")) setEraseMode(false);
+  }
+  // Beendet alle aktiven Stickwerkzeuge (Radierer + Linie-Verschieben),
+  // sodass nach einem Klick auf einen Stichtyp wieder gezeichnet werden
+  // kann. Bild-Verschieben bleibt davon unberührt (eigener Anwendungsfall).
+  function exitStitchToolsIfActive() {
+    const eraserBtn = $("btnEraser");
+    if (eraserBtn && eraserBtn.classList.contains("active")) {
+      setEraseMode(false);
+    }
+    const moveBtn = $("btnMoveStitch");
+    if (moveBtn && moveBtn.classList.contains("active")) {
+      setMoveStitchMode(false);
+    }
+  }
+  function pickThreadColor(hex) {
+    if (!hex) return;
+    exitStitchToolsIfActive();
+    const palette = SP.StitchModel.getPalette();
+    let idx = palette.findIndex((c) => c.toLowerCase() === hex.toLowerCase());
+    if (idx < 0) {
+      const newPalette = palette.slice();
+      if (newPalette.length >= 16) newPalette.shift();
+      newPalette.push(hex);
+      SP.StitchModel.setPalette(newPalette);
+      idx = newPalette.length - 1;
+      buildSwatches();
+      buildFabricSwatches();
+    }
+    SP.StitchModel.setCurrentColorIndex(idx);
+    refreshSwatches();
+    SP.Persistence.autoSave();
+  }
+  function setFabricColor(hex) {
+    if (!hex) return;
+    SP.Fabric.setColor(hex);
+    const inp = $("fabricCustom");
+    if (inp) inp.value = SP.Fabric.getColor();
+    const trig = $("fabricSwatch");
+    if (trig) trig.style.background = SP.Fabric.getColor();
+    refreshFabricSwatches();
+    SP.Renderer.invalidate("background");
+    SP.Persistence.autoSave();
+  }
+  function closeFabricPopup() {
+    const p = $("fabricPopup");
+    if (p) p.classList.remove("visible");
+  }
+  function buildSwatches() {
+    const row = $("swatchRow");
+    if (!row) return;
+    row.innerHTML = "";
+    SP.StitchModel.getPalette().forEach((c, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "swatch";
+      b.dataset.swatchIndex = i;
+      b.style.background = c;
+      b.title = "Farbe " + (i + 1);
+      b.addEventListener("click", () => {
+        exitStitchToolsIfActive();
+        SP.StitchModel.setCurrentColorIndex(i);
+        refreshSwatches();
+        SP.Persistence.autoSave();
+      });
+      row.appendChild(b);
+    });
+    // Regenbogen-Button als letztes Element der Reihe — gleiche Grösse wie die Swatches
+    const rainbow = document.createElement("button");
+    rainbow.type = "button";
+    rainbow.className = "rainbow-btn";
+    rainbow.title = "Eigene Farbe wählen";
+    rainbow.addEventListener("click", () => $("threadCustom").click());
+    row.appendChild(rainbow);
+    refreshSwatches();
+  }
+  function refreshSwatches() {
+    const row = $("swatchRow");
+    if (!row) return;
+    const idx = SP.StitchModel.getCurrentColorIndex();
+    row.querySelectorAll(".swatch").forEach((el) => {
+      const i = parseInt(el.dataset.swatchIndex, 10);
+      el.classList.toggle("active", i === idx);
+    });
+  }
+  function buildFabricSwatches() {
+    const row = $("fabricSwatchRow");
+    if (!row) return;
+    row.innerHTML = "";
+    // Hintergrund: Weiss an erster Stelle, danach restliche Palette in ihrer Reihenfolge
+    const base = SP.StitchModel.getPalette();
+    const palette = ["#ffffff", ...base.filter((c) => c.toLowerCase() !== "#ffffff")];
+    palette.forEach((c) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "swatch fabric-swatch";
+      b.dataset.hex = c.toLowerCase();
+      b.style.background = c;
+      b.title = "Hintergrund: " + c;
+      b.addEventListener("click", () => {
+        setFabricColor(c);
+        closeFabricPopup();
+      });
+      row.appendChild(b);
+    });
+    const rainbow = document.createElement("button");
+    rainbow.type = "button";
+    rainbow.className = "rainbow-btn";
+    rainbow.title = "Eigene Hintergrundfarbe…";
+    rainbow.addEventListener("click", () => {
+      $("fabricCustom").click();
+      closeFabricPopup();
+    });
+    row.appendChild(rainbow);
+    refreshFabricSwatches();
+  }
+  function refreshFabricSwatches() {
+    const row = $("fabricSwatchRow");
+    if (!row) return;
+    const cur = SP.Fabric.getColor().toLowerCase();
+    row.querySelectorAll(".fabric-swatch").forEach((el) => {
+      el.classList.toggle("active", el.dataset.hex === cur);
+    });
+  }
+  function refreshStitchTypeButtons() {
+    const cur = SP.StitchModel.getCurrentStitchType();
+    document.querySelectorAll(".stitch-type-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.type === cur);
+    });
+    refreshControlsForStitchType();
+  }
+  function refreshControlsForStitchType() {
+    const t = SP.StitchModel.getCurrentStitchType();
+    const lwRow = $("lwRow"), multiRow = $("multiRow"), textRow = $("textRow"), distRow = $("distRow");
+    const isText = (t === "text");
+    if (lwRow) lwRow.style.display = (t === "running" || isText) ? "none" : "";
+    if (multiRow) multiRow.style.display = (t === "triple") ? "" : "none";
+    if (textRow) textRow.style.display = isText ? "" : "none";
+    if (distRow) distRow.style.display = isText ? "none" : "";
+    if (isText) return; // Stichlänge-Slider gibt es im Text-Modus nicht
+    // Slider-Range je Stichtyp anpassen (Zickzack darf bis 0.1 runter,
+    // andere Typen ab 0.3 mm) und auf den Default zurücksetzen.
+    const defaults = SP.Const.DEFAULT_DIST_BY_TYPE || {};
+    const mins = SP.Const.MIN_DIST_BY_TYPE || {};
+    const slider = $("distMm");
+    const label = $("distLabel");
+    if (slider) {
+      const minD = (typeof mins[t] === "number") ? mins[t] : 0.3;
+      const maxD = SP.Const.MAX_DIST_MM || 7;
+      const def = (typeof defaults[t] === "number") ? defaults[t] : 0.3;
+      slider.min = minD;
+      slider.max = maxD;
+      const v = Math.min(maxD, Math.max(minD, def));
+      slider.value = v;
+      if (label) label.textContent = v.toFixed(1);
+      SP.PointerInput.setMinDistanceMm(v);
+    }
+  }
+
+  function setPill(id, prefix, value) {
+    const el = $(id);
+    if (!el) return;
+    el.innerHTML = prefix + "<em>" + value + "</em>";
+  }
+  // Realistische Stickgeschwindigkeit einer typischen Haushalts-Stickmaschine:
+  // ca. 850 Stiche/min für Normalstich. Sprünge (JUMP) zählen schneller.
+  const STITCHES_PER_MIN = 850;
+  const JUMPS_PER_MIN = 1700;
+  function formatDuration(seconds) {
+    seconds = Math.max(0, Math.round(seconds));
+    if (seconds < 60) return seconds + " s";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) {
+      return h + " h " + (m < 10 ? "0" + m : m) + " min";
+    }
+    return m + " min " + (s < 10 ? "0" + s : s) + " s";
+  }
+  function estimateStitchSeconds() {
+    let normal = 0, jumps = 0;
+    const paths = SP.StitchModel.iteratePaths();
+    for (const p of paths) {
+      // Pfadanfang = 1 Jump, dann Stiche minus 1 als normale Stiche
+      if (!p.stitches.length) continue;
+      jumps += 1;
+      for (let i = 1; i < p.stitches.length; i++) {
+        if (p.stitches[i].type === SP.Const.STITCH_TYPE.JUMP) jumps++;
+        else normal++;
+      }
+    }
+    return (normal / STITCHES_PER_MIN + jumps / JUMPS_PER_MIN) * 60;
+  }
+  function updateStatus() {
+    setPill("statStitches", "Stiche: ", SP.StitchModel.getStitchCount());
+    setPill("statTime", "Stickzeit: ", formatDuration(estimateStitchSeconds()));
+  }
+
+  return {
+    init() {
+      // Image load
+      const fi = $("fileInput");
+      $("btnLoadImage").addEventListener("click", () => fi.click());
+      fi.addEventListener("change", async () => {
+        const f = fi.files && fi.files[0];
+        if (!f) return;
+        try {
+          const file = await SP.Persistence.readImageFile(f);
+          baseScale = 0;
+          await SP.Background.loadFromFile(file);
+        } catch (e) {
+          alert("Bild konnte nicht geladen werden: " + e.message);
+        }
+        fi.value = "";
+      });
+      $("btnClearImage").addEventListener("click", () => {
+        SP.Background.clear();
+        setMoveMode(false);
+        baseScale = 0;
+      });
+
+      // Bild bewegen Toggle
+      $("btnMoveImage").addEventListener("click", () => {
+        const isOn = $("btnMoveImage").classList.contains("active");
+        if (!isOn && !SP.Background.getState().bitmap) {
+          alert("Zuerst eine Vorlage öffnen.");
+          return;
+        }
+        setMoveMode(!isOn);
+      });
+
+      // Stepper für Grösse und Drehung
+      $("btnScaleDown").addEventListener("click", () => adjustScale(0.9));
+      $("btnScaleUp").addEventListener("click", () => adjustScale(1 / 0.9));
+      $("btnRotLeft").addEventListener("click", () => adjustRot(-5));
+      $("btnRotRight").addEventListener("click", () => adjustRot(5));
+
+      // Farb-Auswahl
+      buildSwatches();
+      // Faden-Custom-Color → Modul-Funktion
+      $("threadCustom").addEventListener("change", (e) => pickThreadColor(e.target.value));
+
+      // Hintergrund: Karten-Popup mit identischer Swatch-Reihe wie beim Faden
+      buildFabricSwatches();
+      const fabricToggle = $("btnFabricToggle");
+      const fabricPopup = $("fabricPopup");
+      fabricToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        fabricPopup.classList.toggle("visible");
+      });
+      document.addEventListener("click", (e) => {
+        if (!fabricPopup.classList.contains("visible")) return;
+        if (fabricPopup.contains(e.target) || fabricToggle.contains(e.target)) return;
+        fabricPopup.classList.remove("visible");
+      });
+      $("fabricCustom").addEventListener("change", (e) => {
+        setFabricColor(e.target.value);
+        closeFabricPopup();
+      });
+      $("fabricCustom").value = SP.Fabric.getColor();
+      $("fabricSwatch").style.background = SP.Fabric.getColor();
+
+      // Stichtyp-Auswahl: schaltet automatisch Radierer/Linie-Verschieben aus.
+      document.querySelectorAll(".stitch-type-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          exitStitchToolsIfActive();
+          SP.StitchModel.setCurrentStitchType(b.dataset.type);
+          refreshStitchTypeButtons();
+          SP.Persistence.autoSave();
+        });
+      });
+
+      // Stichlänge-/Breite-/Bahnen-Slider: ebenfalls Werkzeuge ausschalten,
+      // sobald der Benutzer am Stickparameter dreht.
+      ["distMm", "lineWidthMm", "multiCount"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("input", exitStitchToolsIfActive);
+      });
+
+      // Spiegeln
+      ["imgMirX", "imgMirY"].forEach((id) =>
+        $(id).addEventListener("change", applyMirrors));
+
+      // Sichtbarkeit
+      $("opacity").addEventListener("input", (e) => {
+        const v = parseFloat(e.target.value);
+        SP.Background.setOpacity(v);
+        const lbl = $("opacityLabel");
+        if (lbl) lbl.textContent = Math.round(v * 100) + " %";
+      });
+
+      // Breite (Muster-Breite, nicht Strichdicke)
+      $("lineWidthMm").addEventListener("input", (e) => {
+        const v = parseFloat(e.target.value);
+        SP.StitchModel.setLineWidthMm(v);
+        $("lwLabel").textContent = v.toFixed(1);
+        SP.Renderer.invalidate("stitches");
+        SP.Persistence.autoSave();
+      });
+
+      // Mehrfach: Anzahl Bahnen
+      $("multiCount").addEventListener("input", (e) => {
+        const v = parseInt(e.target.value, 10);
+        SP.StitchModel.setMultiCount(v);
+        $("multiLabel").textContent = String(v);
+        SP.Renderer.invalidate("stitches");
+        SP.Persistence.autoSave();
+      });
+
+      // Hoop
+      // Hoop-Presets aufbauen
+      const presetSelect = $("hoopPreset");
+      SP.HoopPresets.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        presetSelect.appendChild(opt);
+      });
+      function findPresetForCurrent() {
+        const { wMm, hMm } = SP.Hoop.getSize();
+        const r = SP.Hoop.getCornerRadiusMm();
+        const match = SP.HoopPresets.find((p) => {
+          if ((p.rMm || 0) !== r) return false;
+          return (p.wMm === wMm && p.hMm === hMm) ||
+                 (p.wMm === hMm && p.hMm === wMm);
+        });
+        return match ? match.id : "custom";
+      }
+      // Werte werden auf Querformat normalisiert (B ≥ H)
+      function asLandscape(w, h) {
+        return (h > w) ? { w: h, h: w } : { w, h };
+      }
+      function applyHoopPreset(id) {
+        const p = SP.HoopPresets.find((x) => x.id === id);
+        if (!p) return;
+        if (id === "custom") {
+          $("hoopCustom").style.display = "";
+          let w = parseFloat($("hoopW").value) || SP.Hoop.getSize().wMm;
+          let h = parseFloat($("hoopH").value) || SP.Hoop.getSize().hMm;
+          const ls = asLandscape(w, h);
+          SP.Hoop.setSize(ls.w, ls.h);
+          SP.Hoop.setCornerRadiusMm(0);
+          $("hoopW").value = ls.w;
+          $("hoopH").value = ls.h;
+        } else {
+          $("hoopCustom").style.display = "none";
+          const ls = asLandscape(p.wMm, p.hMm);
+          SP.Hoop.setSize(ls.w, ls.h);
+          SP.Hoop.setCornerRadiusMm(p.rMm || 0);
+          $("hoopW").value = ls.w;
+          $("hoopH").value = ls.h;
+        }
+        SP.Renderer.resize();
+        updateStatus();
+        SP.Persistence.autoSave();
+      }
+      presetSelect.addEventListener("change", () => applyHoopPreset(presetSelect.value));
+
+      // Info-Popup: Toggle bei Klick auf "i", schliessen via × oder Klick ausserhalb
+      const infoBtn = $("infoBtn");
+      const infoPopup = $("infoPopup");
+      const infoClose = $("infoPopupClose");
+      if (infoBtn && infoPopup) {
+        const toggleInfo = () => {
+          infoPopup.style.display = (infoPopup.style.display === "none" || !infoPopup.style.display) ? "block" : "none";
+        };
+        infoBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleInfo(); });
+        if (infoClose) infoClose.addEventListener("click", () => { infoPopup.style.display = "none"; });
+        document.addEventListener("click", (e) => {
+          if (infoPopup.style.display === "block" && !infoPopup.contains(e.target) && e.target !== infoBtn) {
+            infoPopup.style.display = "none";
+          }
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && infoPopup.style.display === "block") {
+            infoPopup.style.display = "none";
+          }
+        });
+      }
+
+      // Rahmen 90° drehen — vertauscht B und H
+      $("btnRotateHoop").addEventListener("click", () => {
+        const { wMm, hMm } = SP.Hoop.getSize();
+        SP.Hoop.setSize(hMm, wMm);
+        $("hoopW").value = SP.Hoop.getSize().wMm;
+        $("hoopH").value = SP.Hoop.getSize().hMm;
+        SP.Renderer.resize();
+        updateStatus();
+        SP.Persistence.autoSave();
+      });
+
+      const onCustomHoop = () => {
+        SP.Hoop.setSize(parseFloat($("hoopW").value), parseFloat($("hoopH").value));
+        SP.Hoop.setCornerRadiusMm(0);
+        SP.Renderer.resize();
+        updateStatus();
+        SP.Persistence.autoSave();
+      };
+      $("hoopW").addEventListener("change", onCustomHoop);
+      $("hoopH").addEventListener("change", onCustomHoop);
+
+      // Distance and jump
+      $("distMm").addEventListener("input", () => {
+        const v = parseFloat($("distMm").value);
+        SP.PointerInput.setMinDistanceMm(v);
+        $("distLabel").textContent = v.toFixed(1);
+      });
+
+      // Display toggles
+      $("showGrid").addEventListener("change", () => SP.Renderer.setShowGrid($("showGrid").checked));
+      $("showJumps").addEventListener("change", () => SP.Renderer.setShowJumps($("showJumps").checked));
+
+      // Undo / Redo / Clear
+      $("btnUndoPath").addEventListener("click", () => {
+        SP.StitchModel.undoLastPath();
+        SP.Renderer.invalidate("stitches");
+        updateStatus(); SP.Persistence.autoSave();
+      });
+      $("btnClear").addEventListener("click", () => {
+        if (!confirm("Wirklich alle Stiche löschen?")) return;
+        SP.StitchModel.clearAll();
+        SP.Renderer.invalidate("stitches");
+        updateStatus(); SP.Persistence.autoSave();
+      });
+
+      // Alles skalieren / verschieben (in "Mehr Einstellungen")
+      const scaleStep = 1.1;
+      const moveStepMm = 5;
+      // "Alles skalieren" skaliert Stiche UND Hintergrundbild um den
+      // Nullpunkt herum mit demselben Faktor — Vorlage und Stickerei
+      // bleiben in Lage und Grösse zueinander identisch.
+      function scaleEverything(factor) {
+        SP.StitchModel.scaleAllStitches(factor);
+        const bg = SP.Background.getState();
+        if (bg && bg.bitmap) {
+          SP.Background.setTransform({
+            scaleMmPerPx: bg.scaleMmPerPx * factor,
+            xMm: bg.xMm * factor,
+            yMm: bg.yMm * factor,
+          });
+        }
+        SP.Renderer.invalidate("stitches");
+        SP.Renderer.invalidate("background");
+        updateStatus();
+        SP.Persistence.autoSave();
+      }
+      $("btnScaleAllUp").addEventListener("click", () => scaleEverything(scaleStep));
+      $("btnScaleAllDown").addEventListener("click", () => scaleEverything(1 / scaleStep));
+      // "Alles verschieben" verschiebt sowohl alle Stiche als auch das
+      // Hintergrundbild um den gleichen Vektor, damit Vorlage und Stickerei
+      // synchron bleiben.
+      function translateEverything(dxMm, dyMm) {
+        SP.StitchModel.translateAllStitches(dxMm, dyMm);
+        const bg = SP.Background.getState();
+        if (bg && bg.bitmap) {
+          SP.Background.setTransform({
+            xMm: bg.xMm + dxMm,
+            yMm: bg.yMm + dyMm,
+          });
+        }
+        SP.Renderer.invalidate("stitches");
+        SP.Renderer.invalidate("background");
+        updateStatus();
+        SP.Persistence.autoSave();
+      }
+      $("btnMoveAllLeft").addEventListener("click", () => translateEverything(-moveStepMm, 0));
+      $("btnMoveAllRight").addEventListener("click", () => translateEverything(moveStepMm, 0));
+      $("btnMoveAllUp").addEventListener("click", () => translateEverything(0, -moveStepMm));
+      $("btnMoveAllDown").addEventListener("click", () => translateEverything(0, moveStepMm));
+
+      // Save (Format aus Dropdown)
+      function selectedFormat() {
+        return $("saveFormat").value || "dst";
+      }
+      $("btnSave").addEventListener("click", () => {
+        const fmt = selectedFormat();
+        if (fmt === "json") {
+          const data = {
+            version: "stitchpath-1",
+            hoop: {
+              wMm: SP.Hoop.getSize().wMm,
+              hMm: SP.Hoop.getSize().hMm,
+              rMm: SP.Hoop.getCornerRadiusMm(),
+            },
+            model: SP.StitchModel.serialize(),
+            background: SP.Background.serialize(),
+          };
+          const json = JSON.stringify(data, null, 2);
+          const bytes = new TextEncoder().encode(json);
+          SP.Persistence.downloadBlob(bytes, "stitchpath-projekt.json", "application/json");
+          return;
+        }
+        const flat = SP.PathOps.flattenAll();
+        if (flat.length === 0) { alert("Keine Stiche zum Speichern."); return; }
+        if (fmt === "exp") {
+          const bytes = SP.EXPEncoder.encode(flat);
+          SP.Persistence.downloadBlob(bytes, "stitchpath.exp");
+        } else {
+          // DST mit der de-facto-Konvention: bit 2 von Byte 2 = x+81, bit 3 = x-81
+          // (pyembroidery, Bernina, ezstitchdigitizing, Wilcom, InkStitch — alle gleich)
+          const bytes = SP.DSTEncoder.encode(flat, {
+            label: "StitchPath",
+            swapX81: true,
+          });
+          SP.Persistence.downloadBlob(bytes, "stitchpath.dst");
+        }
+      });
+
+      // Pointer wiring
+      SP.PointerInput.on("pathStart", () => {
+        SP.StitchModel.newPath();
+      });
+      SP.PointerInput.on("stitchAdded", (s) => {
+        SP.StitchModel.appendStitch(s);
+        SP.Renderer.invalidate("stitches");
+        updateStatus();
+        SP.Persistence.autoSave();
+      });
+      SP.PointerInput.on("pathEnd", () => {
+        SP.StitchModel.endPath();
+        updateStatus();
+        SP.Persistence.autoSave();
+      });
+      SP.PointerInput.on("cursorMove", (d) => {
+        SP.Renderer.setCursorMm(d.mm);
+        updateStatus({ cursor: d.mm });
+        if (SP.PointerInput.getMode() === "erase") {
+          SP.Renderer.setEraserCursor({ mm: d.mm, radiusMm: eraserRadiusMm });
+        }
+      });
+      SP.PointerInput.on("clickPreview", (d) => {
+        SP.Renderer.setClickPreview(d);
+      });
+      SP.PointerInput.on("clickModeChange", (active) => {
+        const banner = document.getElementById("clickBanner");
+        if (banner) banner.classList.toggle("visible", !!active);
+      });
+      SP.PointerInput.on("erase", (mm) => {
+        if (SP.StitchModel.eraseInRadius(mm, eraserRadiusMm)) {
+          SP.Renderer.invalidate("stitches");
+          updateStatus();
+          SP.Persistence.autoSave();
+        }
+      });
+      // Text-Werkzeug-State
+      let textVariant = "standard";
+      let textStitchType = "running";
+      function readTextOptions() {
+        return {
+          text: ($("textInput") && $("textInput").value || "").trim(),
+          heightMm: parseFloat($("textHeightMm").value) || 10,
+          rotationDeg: parseFloat($("textRotDeg").value) || 0,
+          variant: textVariant,
+          tstype: textStitchType,
+          lwMm: parseFloat($("textLwMm").value) || 1.5,
+          distMm: parseFloat($("textDistMm").value) || 0.2,
+        };
+      }
+      // Text-Platzierung: Klick auf Canvas → eingegebenen Text mit aktueller
+      // Konfiguration an dieser Position als Pfade einfügen.
+      SP.PointerInput.on("textPlace", (d) => {
+        const opts = readTextOptions();
+        if (!opts.text) return;
+        const strokes = SP.Font.renderText(opts.text, {
+          heightMm: opts.heightMm,
+          originXMm: d.mm.xMm,
+          originYMm: d.mm.yMm,
+          anchor: "center",
+          variant: opts.variant,
+          stitchType: opts.tstype,
+          rotationDeg: opts.rotationDeg,
+        });
+        // Stichart für die Modell-Pfade:
+        //  - "triple" wurde bereits in SP.Font als 3 parallele Strokes
+        //    inline erzeugt → jedes wird als "running"-Pfad abgelegt.
+        //  - "running" und "zigzag" bleiben wie gewählt.
+        const pathStitchType = (opts.tstype === "triple") ? "running" : opts.tstype;
+        for (const stroke of strokes) {
+          SP.StitchModel.newPath({
+            stitchType: pathStitchType,
+            lineWidthMm: (pathStitchType === "zigzag") ? opts.lwMm : undefined,
+            stitchDistMm: (pathStitchType === "zigzag") ? opts.distMm : undefined,
+          });
+          for (const pt of stroke) {
+            SP.StitchModel.appendStitch({
+              xMm: pt.xMm,
+              yMm: pt.yMm,
+              type: SP.Const.STITCH_TYPE.NORMAL,
+              clicked: true, // verhindert ungewollte Glättung an Hershey-Ecken
+            });
+          }
+          SP.StitchModel.endPath();
+        }
+        SP.Renderer.invalidate("stitches");
+        updateStatus();
+        SP.Persistence.autoSave();
+      });
+
+      // Slider-Labels live aktualisieren
+      const thInp = $("textHeightMm"), thLbl = $("textHeightLabel");
+      if (thInp && thLbl) {
+        const sync = () => { thLbl.textContent = parseFloat(thInp.value).toFixed(1); SP.Renderer.invalidate("live"); };
+        thInp.addEventListener("input", sync); sync();
+      }
+      const trInp = $("textRotDeg"), trLbl = $("textRotLabel");
+      if (trInp && trLbl) {
+        const sync = () => { trLbl.textContent = parseInt(trInp.value, 10); SP.Renderer.invalidate("live"); };
+        trInp.addEventListener("input", sync); sync();
+      }
+      const tlwInp = $("textLwMm"), tlwLbl = $("textLwLabel");
+      if (tlwInp && tlwLbl) {
+        const sync = () => { tlwLbl.textContent = parseFloat(tlwInp.value).toFixed(1); SP.Renderer.invalidate("live"); };
+        tlwInp.addEventListener("input", sync); sync();
+      }
+      const tdInp = $("textDistMm"), tdLbl = $("textDistLabel");
+      if (tdInp && tdLbl) {
+        const sync = () => { tdLbl.textContent = parseFloat(tdInp.value).toFixed(2); };
+        tdInp.addEventListener("input", sync); sync();
+      }
+      const txtInp = $("textInput");
+      if (txtInp) txtInp.addEventListener("input", () => SP.Renderer.invalidate("live"));
+
+      // Variant-Buttons
+      document.querySelectorAll(".text-variant-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          textVariant = b.dataset.variant;
+          document.querySelectorAll(".text-variant-btn").forEach((x) =>
+            x.classList.toggle("active", x === b)
+          );
+          SP.Renderer.invalidate("live");
+        });
+      });
+      // Stichart-Buttons für Text
+      document.querySelectorAll(".text-stitch-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          textStitchType = b.dataset.tstype;
+          document.querySelectorAll(".text-stitch-btn").forEach((x) =>
+            x.classList.toggle("active", x === b)
+          );
+          const zigzagRow = $("textZigzagWidthRow");
+          if (zigzagRow) zigzagRow.style.display = (textStitchType === "zigzag") ? "" : "none";
+          SP.Renderer.invalidate("live");
+        });
+      });
+
+      // Mit Text-Modus-State versorgen, damit der Renderer eine Vorschau
+      // zeichnen kann (siehe Renderer.drawLive).
+      SP.Renderer.setTextPreviewProvider(() => {
+        if (SP.StitchModel.getCurrentStitchType() !== "text") return null;
+        const o = readTextOptions();
+        if (!o.text) return null;
+        return o;
+      });
+      // Klick auf bestehende Stichbahn: aktuellen Werkzeug-Modus zurück auf
+      // "Zeichnen" stellen und Buttons für Verschieben/Löschen sichtbar
+      // deaktivieren. PointerInput hat sich intern bereits auf draw gestellt.
+      SP.PointerInput.on("pathPicked", () => {
+        const eraserBtn = $("btnEraser");
+        const moveStitchBtn = $("btnMoveStitch");
+        const moveImgBtn = $("btnMoveImage");
+        if (eraserBtn && eraserBtn.classList.contains("active")) {
+          eraserBtn.classList.remove("active");
+          SP.Renderer.setEraserCursor(null);
+        }
+        if (moveStitchBtn && moveStitchBtn.classList.contains("active")) {
+          moveStitchBtn.classList.remove("active");
+        }
+        if (moveImgBtn && moveImgBtn.classList.contains("active")) {
+          moveImgBtn.classList.remove("active");
+        }
+        SP.Renderer.invalidate("stitches");
+      });
+
+      // Stich-Verschieben-Toggle
+      $("btnMoveStitch").addEventListener("click", () => {
+        const isOn = $("btnMoveStitch").classList.contains("active");
+        setMoveStitchMode(!isOn);
+      });
+      // Radierer-Toggle
+      $("btnEraser").addEventListener("click", () => {
+        const isOn = $("btnEraser").classList.contains("active");
+        setEraseMode(!isOn);
+      });
+      // Radierer-Grösse
+      $("eraserSizeMm").addEventListener("input", (e) => {
+        eraserRadiusMm = parseFloat(e.target.value) || 4;
+        $("eraserSizeLabel").textContent = eraserRadiusMm.toFixed(1);
+      });
+
+      // Projekt importieren (Export ist im "Speichern"-Button mit Format "Projekt")
+      const projectInput = document.createElement("input");
+      projectInput.type = "file";
+      projectInput.accept = ".json,.dst,.exp,application/json,application/octet-stream";
+      projectInput.style.display = "none";
+      document.body.appendChild(projectInput);
+      $("btnImportProject").addEventListener("click", () => projectInput.click());
+      projectInput.addEventListener("change", async () => {
+        const f = projectInput.files && projectInput.files[0];
+        if (!f) return;
+        try {
+          const name = (f.name || "").toLowerCase();
+          if (name.endsWith(".dst") || name.endsWith(".exp")) {
+            // Stickdatei importieren — Modell ersetzen
+            const buf = await f.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            const decoded = [];
+            let dstSwap = false;
+            if (name.endsWith(".dst")) {
+              const res = SP.DSTDecoder.decode(bytes);
+              decoded.push(...res.paths);
+              dstSwap = !!res.swapX81;
+            } else {
+              decoded.push(...SP.EXPDecoder.decode(bytes));
+            }
+            SP.StitchModel.setDstSwapX81(dstSwap);
+            // Bounding-Box berechnen, Design auf Rahmen-Mitte zentrieren,
+            // Stickrahmen auf Design-Grösse anpassen (wie InkStitch in Inkscape).
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (const p of decoded) {
+              for (const s of p.stitches) {
+                if (s.xMm < minX) minX = s.xMm;
+                if (s.xMm > maxX) maxX = s.xMm;
+                if (s.yMm < minY) minY = s.yMm;
+                if (s.yMm > maxY) maxY = s.yMm;
+              }
+            }
+            if (isFinite(minX) && isFinite(minY)) {
+              const cx = (minX + maxX) / 2;
+              const cy = (minY + maxY) / 2;
+              for (const p of decoded) {
+                for (const s of p.stitches) {
+                  s.xMm -= cx;
+                  s.yMm -= cy;
+                }
+              }
+              const designW = maxX - minX;
+              const designH = maxY - minY;
+              const hoopW = Math.max(50, Math.ceil(designW + 20));
+              const hoopH = Math.max(50, Math.ceil(designH + 20));
+              SP.Hoop.setSize(hoopW, hoopH);
+              SP.Hoop.setCornerRadiusMm(0);
+            }
+            SP.StitchModel.deserialize({ paths: decoded, nextId: decoded.length + 1 });
+          } else {
+            const text = await f.text();
+            const data = JSON.parse(text);
+            if (data.hoop) SP.Hoop.setSize(data.hoop.wMm, data.hoop.hMm);
+            if (data.hoop && typeof data.hoop.rMm === "number") {
+              SP.Hoop.setCornerRadiusMm(data.hoop.rMm);
+            }
+            if (data.model) SP.StitchModel.deserialize(data.model);
+            if (data.background) SP.Background.deserialize(data.background);
+            if (data.fabric) SP.Fabric.setColor(data.fabric);
+          }
+          $("hoopW").value = SP.Hoop.getSize().wMm;
+          $("hoopH").value = SP.Hoop.getSize().hMm;
+          $("lineWidthMm").value = SP.StitchModel.getLineWidthMm();
+          $("lwLabel").textContent = SP.StitchModel.getLineWidthMm().toFixed(1);
+          $("multiCount").value = SP.StitchModel.getMultiCount();
+          $("multiLabel").textContent = String(SP.StitchModel.getMultiCount());
+          syncBgInputs();
+          refreshStitchTypeButtons();
+          buildSwatches();
+          refreshSwatches();
+          refreshVorlagebar();
+          SP.Renderer.resize();
+          updateStatus();
+          SP.Persistence.autoSave();
+        } catch (err) {
+          alert("Datei konnte nicht geladen werden: " + err.message);
+        }
+        projectInput.value = "";
+      });
+
+      // Background changes
+      SP.Background.onChange(() => {
+        if (!suppressBgSync) syncBgInputs();
+        refreshVorlagebar();
+        SP.Renderer.invalidate("background");
+        SP.Persistence.autoSave();
+      });
+
+      // Initial sync
+      const currentPresetId = findPresetForCurrent();
+      presetSelect.value = currentPresetId;
+      $("hoopCustom").style.display = (currentPresetId === "custom") ? "" : "none";
+      $("hoopW").value = SP.Hoop.getSize().wMm;
+      $("hoopH").value = SP.Hoop.getSize().hMm;
+      $("distMm").value = SP.PointerInput.getMinDistanceMm();
+      $("distLabel").textContent = SP.PointerInput.getMinDistanceMm().toFixed(1);
+      $("lineWidthMm").value = SP.StitchModel.getLineWidthMm();
+      $("lwLabel").textContent = SP.StitchModel.getLineWidthMm().toFixed(1);
+      $("multiCount").value = SP.StitchModel.getMultiCount();
+      $("multiLabel").textContent = String(SP.StitchModel.getMultiCount());
+      refreshStitchTypeButtons();
+      syncBgInputs();
+      refreshVorlagebar();
+      updateStatus();
+
+      // Keyboard – im Capture-Phase, damit unser Handler vor Slidern/Selects greift.
+      window.addEventListener("keydown", function (e) {
+        const t = e.target;
+        const tag = (t && t.tagName ? t.tagName : "").toUpperCase();
+        const itype = (t && t.type ? t.type : "").toLowerCase();
+        const isTextInput =
+          tag === "TEXTAREA" ||
+          (tag === "INPUT" &&
+            (itype === "text" || itype === "number" ||
+             itype === "search" || itype === "email" || itype === "url"));
+        const ctrl = e.ctrlKey || e.metaKey;
+        const isZ = e.code === "KeyZ" || e.key === "z" || e.key === "Z";
+        if (ctrl && isZ) {
+          if (isTextInput) return;
+          e.preventDefault();
+          e.stopPropagation();
+          // Cmd/Ctrl+Z → ganzer Strich zurück
+          // Cmd/Ctrl+Shift+Z → Wiederherstellen (Redo)
+          if (e.shiftKey) SP.StitchModel.redo();
+          else SP.StitchModel.undoLastPath();
+          SP.Renderer.invalidate("stitches");
+          updateStatus();
+          SP.Persistence.autoSave();
+          return;
+        }
+        if (!ctrl && (e.code === "KeyF" || e.key === "f" || e.key === "F")) {
+          if (isTextInput) return;
+          SP.Viewport.fitHoop();
+          SP.Renderer.invalidate("viewport");
+          updateStatus();
+        }
+      }, true);
+    },
+    updateStatus,
+  };
+})();
+
+// ============================================================
+// === Init ===
+// ============================================================
+window.addEventListener("DOMContentLoaded", () => {
+  SP.Renderer.init({
+    bg: document.getElementById("bgCanvas"),
+    stitch: document.getElementById("stitchCanvas"),
+    live: document.getElementById("liveCanvas"),
+  });
+  SP.Persistence.restore();
+  SP.Renderer.resize();
+  SP.PointerInput.attach(document.getElementById("liveCanvas"));
+  SP.UIShell.init();
+  SP.Renderer.invalidate("all");
+});
+</script>
+</body>
+</html>
