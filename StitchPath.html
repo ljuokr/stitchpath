@@ -765,6 +765,118 @@
   #statTime { bottom: 38px; }
   .overlay-pill em { font-style: normal; color: var(--accent-deep); font-weight: 600; }
 
+  /* ---------- Hamburger-Button (nur Mobile/Tablet sichtbar) ---------- */
+  #btnMenu {
+    display: none;
+    width: 40px; height: 40px;
+    min-height: 0; min-width: 0;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--ink);
+    align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #btnMenu svg { width: 22px; height: 22px; display: block; }
+  #btnMenu:hover { background: var(--line-soft); }
+
+  /* ---------- Sidebar-Backdrop (nur sichtbar wenn Sidebar offen) ---------- */
+  #sidebarBackdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(40, 30, 20, 0.32);
+    z-index: 99;
+  }
+  body.sidebar-open #sidebarBackdrop { display: block; }
+
+  /* ---------- Touch-freundliche Slider (für alle Bildschirmgrössen) ---------- */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    height: 24px;
+    background: transparent;
+    width: 100%;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    background: var(--line);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px; border-radius: 2px;
+    background: var(--line);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(60,40,20,0.25);
+    margin-top: -9px; cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(60,40,20,0.25);
+    cursor: pointer;
+  }
+
+  /* ---------- Tablet (≤ 1024 px Breite) ---------- */
+  @media (max-width: 1024px) {
+    #sidebar { width: 264px; padding: 12px 12px 16px; }
+    .stitch-types button.stitch-type-btn { min-height: 56px; font-size: 12px; }
+    .tool-btn { min-height: 64px; font-size: 12px; }
+    button.block { min-height: 44px; }
+  }
+
+  /* ---------- Phone & schmales Tablet (≤ 800 px) ---------- */
+  @media (max-width: 800px) {
+    #btnMenu { display: inline-flex; }
+    #topbar { gap: 10px; padding: 8px 12px; }
+    .brand h1 { font-size: 15px; }
+    .warn-note { display: none; }
+    /* Sidebar wird zu Drawer-Overlay, Canvas darunter sichtbar */
+    #sidebar {
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      width: 84vw; max-width: 320px;
+      z-index: 100;
+      transform: translateX(-100%);
+      transition: transform 0.22s ease;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.18);
+      padding-top: 14px;
+    }
+    body.sidebar-open #sidebar { transform: translateX(0); }
+    /* Canvas-Bereich nimmt volle Breite */
+    #main { display: block; height: 100%; }
+    /* Topbar-Hoop-Picker kompakter */
+    .topactions { gap: 6px; }
+    .hp-label { display: none; }
+    .save-format { max-width: 80px; }
+    button.small { padding: 8px 10px; }
+    /* Vorlage-Bar einzeilig scrollbar */
+    #vorlagebar {
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Status-Pills weiter unten, damit sie nicht den Info-Button überlappen */
+    #statStitches { bottom: 12px; right: 12px; font-size: 11.5px; padding: 4px 9px; }
+    #statTime { bottom: 38px; right: 12px; font-size: 11.5px; padding: 4px 9px; }
+    /* Info-Popup gross genug für Touch */
+    #infoPopup { left: 12px; right: 12px; min-width: 0; max-width: none; }
+  }
+
+  /* ---------- Schmales Phone (≤ 480 px) ---------- */
+  @media (max-width: 480px) {
+    .brand h1 { display: none; }
+    #infoBtn { width: 36px; height: 36px; font-size: 15px; }
+    .stitch-types button.stitch-type-btn { min-height: 50px; }
+    /* Banner-Text kleiner für schmale Schirme */
+    #moveBanner, #clickBanner, #eraseBanner, #moveStitchBanner {
+      font-size: 13px; padding: 8px 14px;
+    }
+  }
+
   /* ---------- Empty hint over canvas ---------- */
   #welcome {
     position: absolute; inset: 0;
@@ -791,6 +903,13 @@
 <body>
 
 <header id="topbar">
+  <button id="btnMenu" type="button" aria-label="Menü öffnen" title="Menü">
+    <svg viewBox="0 0 22 22" aria-hidden="true">
+      <line x1="4" y1="7" x2="18" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <line x1="4" y1="11" x2="18" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <line x1="4" y1="15" x2="18" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </button>
   <div class="brand">
     <div class="logo">S</div>
     <h1>StitchPath</h1>
@@ -886,6 +1005,8 @@
   <div class="vorlage-divider"></div>
   <button id="btnClearImage" class="small">Vorlage entfernen</button>
 </div>
+
+<div id="sidebarBackdrop"></div>
 
 <div id="main">
   <aside id="sidebar">
@@ -4397,6 +4518,53 @@ SP.UIShell = (() => {
         SP.Persistence.autoSave();
       }
       presetSelect.addEventListener("change", () => applyHoopPreset(presetSelect.value));
+
+      // Mobile/Tablet-Sidebar-Toggle
+      const btnMenu = $("btnMenu");
+      const sidebarBackdrop = $("sidebarBackdrop");
+      const sidebarEl = $("sidebar");
+      function setSidebarOpen(open) {
+        document.body.classList.toggle("sidebar-open", !!open);
+      }
+      if (btnMenu) {
+        btnMenu.addEventListener("click", (e) => {
+          e.stopPropagation();
+          setSidebarOpen(!document.body.classList.contains("sidebar-open"));
+        });
+      }
+      if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener("click", () => setSidebarOpen(false));
+      }
+      // Sidebar nach Aktion auf Mobile automatisch schliessen, damit der
+      // Canvas wieder voll sichtbar ist. Wir hängen einen Click-Listener
+      // an die wichtigsten Sidebar-Bedienelemente.
+      if (sidebarEl) {
+        sidebarEl.addEventListener("click", (e) => {
+          if (window.matchMedia("(max-width: 800px)").matches) {
+            const t = e.target;
+            // Sticktyp-Buttons + Tool-Buttons + Speichern → Sidebar zu
+            if (t.closest && (
+              t.closest(".stitch-type-btn") ||
+              t.closest(".tool-btn") ||
+              t.closest(".text-variant-btn") ||
+              t.closest(".text-stitch-btn") ||
+              t.closest("#btnSave") ||
+              t.closest("#btnLoadImage") ||
+              t.closest("#btnImportProject") ||
+              t.closest("#btnClear")
+            )) {
+              // Kurze Verzögerung damit der Klick-Handler des Buttons
+              // vorher seinen Job machen kann.
+              setTimeout(() => setSidebarOpen(false), 80);
+            }
+          }
+        });
+      }
+      // Bei Geräte-Drehung Layout neu vermessen
+      window.addEventListener("orientationchange", () => {
+        setSidebarOpen(false);
+        setTimeout(() => SP.Renderer.resize(), 250);
+      });
 
       // Info-Popup: Toggle bei Klick auf "i", schliessen via × oder Klick ausserhalb
       const infoBtn = $("infoBtn");
