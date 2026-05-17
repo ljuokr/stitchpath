@@ -834,7 +834,14 @@
   /* ---------- Phone & schmales Tablet (≤ 800 px) ---------- */
   @media (max-width: 800px) {
     #btnMenu { display: inline-flex; }
-    #topbar { gap: 10px; padding: 8px 12px; }
+    /* Topbar darf nicht wrappen; .topactions wird scrollbar. Hamburger
+       und Brand bleiben links fixiert sichtbar. */
+    #topbar {
+      gap: 8px; padding: 8px 10px;
+      flex-wrap: nowrap; min-width: 0;
+    }
+    #btnMenu { flex-shrink: 0; }
+    .brand { flex-shrink: 0; min-width: 0; }
     .brand h1 { font-size: 15px; }
     .warn-note { display: none; }
     /* Sidebar wird zu Drawer-Overlay, Canvas darunter sichtbar */
@@ -852,8 +859,21 @@
     body.sidebar-open #sidebar { transform: translateX(0); }
     /* #main bleibt flex, aber die Sidebar ist per position:fixed aus
        dem Flow → der Canvas-Bereich bekommt die volle Breite. */
-    /* Topbar-Hoop-Picker kompakter */
-    .topactions { gap: 6px; }
+    /* Topbar-Aktionen horizontal scrollbar machen, falls's nicht passt */
+    .topactions {
+      gap: 6px;
+      margin-left: auto;
+      flex: 1 1 auto; min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      flex-wrap: nowrap;
+      scrollbar-width: thin;
+      padding-bottom: 2px;
+    }
+    .topactions::-webkit-scrollbar { height: 4px; }
+    .topactions::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+    .topactions > * { flex-shrink: 0; }
     .hp-label { display: none; }
     .save-format { max-width: 80px; }
     button.small { padding: 8px 10px; }
@@ -870,8 +890,8 @@
     #infoPopup { left: 12px; right: 12px; min-width: 0; max-width: none; }
   }
 
-  /* ---------- Schmales Phone (≤ 480 px) ---------- */
-  @media (max-width: 480px) {
+  /* ---------- Schmales Phone (≤ 640 px) ---------- */
+  @media (max-width: 640px) {
     .brand h1 { display: none; }
     #infoBtn { width: 36px; height: 36px; font-size: 15px; }
     .stitch-types button.stitch-type-btn { min-height: 50px; }
