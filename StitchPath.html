@@ -1713,45 +1713,24 @@ SP.StitchModel = (() => {
       const r2 = radiusMm * radiusMm;
       const out = [];
       let changed = false;
-      // Vor dem eigentlichen Erase: für Pfade, die jetzt zum ersten Mal
-      // radiert werden, den aktuell sichtbaren Render-Zustand "einbacken".
-      // Damit wirkt sich der Radiergummi exakt auf die sichtbare Form aus
-      // und keine spätere Re-Berechnung verschiebt die Bahn.
+      // Vor dem eigentlichen Erase: bei Mehrfachstich die Hauptachse der
+      // parallelen Reihen einfrieren, damit das Radieren am Anfang nicht
+      // die gesamte Bahn rotieren lässt. Keine Glättung mehr — gezeichnete
+      // Stiche bleiben in Position.
       for (const p of paths) {
         if (p.smoothFrozen) continue;
         if (p.stitches.length < 2) continue;
         if (!SP.PathOps) continue;
         if (
-          p.stitchType === "zigzag" &&
-          p.stitches.length >= 3 &&
-          typeof SP.PathOps.smoothZigzagCenterline === "function"
-        ) {
-          const lw = (typeof p.lineWidthMm === "number")
-            ? p.lineWidthMm : lineWidthMm;
-          const baked = SP.PathOps.smoothZigzagCenterline(p.stitches, lw);
-          if (baked && baked.length === p.stitches.length) {
-            for (let i = 0; i < baked.length; i++) {
-              baked[i].clicked = !!p.stitches[i].clicked;
-              baked[i].type = p.stitches[i].type;
-            }
-            p.stitches = baked;
-            p.smoothFrozen = true;
-          }
-        } else if (
           p.stitchType === "triple" &&
           typeof SP.PathOps.computeParallelAxis === "function"
         ) {
-          // Bei Mehrfachstich Haupt-Achse einfrieren, damit Erase die
-          // parallelen Reihen nicht neu ausrichtet (sonst kippt der ganze
-          // Strang, sobald der Anfang verändert wird).
           const axis = SP.PathOps.computeParallelAxis(p.stitches);
           if (axis) {
             p.parallelAxis = axis;
             p.smoothFrozen = true;
           }
-        } else if (p.stitchType === "running") {
-          // Geradstich hat keine Transformation, aber wir markieren ihn
-          // trotzdem als frozen — semantisch konsistent.
+        } else {
           p.smoothFrozen = true;
         }
       }
@@ -2329,21 +2308,10 @@ SP.PathOps = (() => {
         return out;
       }
       if (stitchType === "zigzag") {
-        // Mittellinie mm-basiert glätten: der Filterradius richtet sich nach
-        // der Satinbreite (Pinselradius lw/2). So wirkt die Glättung physikalisch
-        // gleich, egal wie kurz die Stichlänge eingestellt ist — auch bei sehr
-        // dichten Eingabepunkten wird Handzittern zuverlässig herausgefiltert.
-        // ignoreInteriorClicks: bei Satin sollen Klick-Anker die Glättung NICHT
-        // unterbrechen, sonst sehen Klick-Linien wie eckige Ketten aus.
-        // smoothFrozen: wird vom Radierer gesetzt, damit nach dem Erase die
-        // bereits eingefrorene Mittellinie nicht erneut umgeformt wird.
-        let smoothed;
-        if (opts.smoothFrozen) {
-          smoothed = stitches;
-        } else {
-          smoothed = smoothZigzagCenterline(stitches, lw);
-        }
-        return makeZigzag(smoothed, stepMm, lw / 2);
+        // Mittellinie 1:1 verwenden — gezeichnete Stiche werden NICHT mehr
+        // geglättet. Der Satin-Zickzack wird direkt aus den gesetzten Punkten
+        // generiert; jede Ecke und jeder Klick bleibt exakt erhalten.
+        return makeZigzag(stitches, stepMm, lw / 2);
       }
       return stitches.map((s) => ({ ...s }));
     },
@@ -3119,7 +3087,11 @@ SP.PointerInput = (() => {
         }
       }
       lastSamplePx = p;
-      lastSampleMm = mm;
+      // lastSampleMm erst aktualisieren, wenn pressMoved aktiv ist. Vorher
+      // bleibt es auf der Pointerdown-Position — sonst rutscht der erste
+      // Stich des Drags bis zum Cursor "zur Press-Zeit", und das allererste
+      // Stich-Segment wird länger als die eingestellte Stichlänge.
+      if (pressMoved) lastSampleMm = mm;
       // Während des Drags die Vorschaulinie vom letzten Stich zur Maus anzeigen.
       emit("clickPreview", { from: lastAcceptedMm, to: mm });
       e.preventDefault();
