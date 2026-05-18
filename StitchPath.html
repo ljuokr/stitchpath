@@ -1506,6 +1506,7 @@ SP.StitchModel = (() => {
   return {
     newPath(meta) {
       meta = meta || {};
+      const id = nextId++;
       const colorIndex = meta.colorIndex !== undefined ? meta.colorIndex : currentColorIndex;
       let stitchType = meta.stitchType || currentStitchType;
       if (stitchType === "satin") stitchType = "zigzag"; // legacy
@@ -1515,35 +1516,6 @@ SP.StitchModel = (() => {
         ? meta.stitchDistMm
         : (SP.PointerInput && SP.PointerInput.getMinDistanceMm
             ? SP.PointerInput.getMinDistanceMm() : 1.0);
-
-      // Auto-Merge bei Mehrfachstich: wenn der zuletzt abgeschlossene Pfad
-      // dieselben Einstellungen hat und sein letzter Stich nahe an
-      // tryContinueAt liegt, wird daran fortgesetzt statt einen neuen
-      // Pfad anzulegen. So bleibt die parallele Reihen-Ausrichtung erhalten,
-      // wenn man eine Linie in mehreren Drag-Bewegungen zeichnet.
-      if (stitchType === "triple" && meta.tryContinueAt && paths.length > 0) {
-        const last = paths[paths.length - 1];
-        if (
-          last.stitchType === "triple" &&
-          Math.abs((last.lineWidthMm || 0) - lwMm) < 1e-6 &&
-          (last.multiCount || 0) === mc &&
-          (last.colorIndex || 0) === colorIndex &&
-          Math.abs((last.stitchDistMm || 0) - dist) < 1e-6 &&
-          last.stitches.length > 0
-        ) {
-          const lastStitch = last.stitches[last.stitches.length - 1];
-          const ddx = meta.tryContinueAt.xMm - lastStitch.xMm;
-          const ddy = meta.tryContinueAt.yMm - lastStitch.yMm;
-          const distMm = Math.hypot(ddx, ddy);
-          const threshold = Math.max(2.0, dist * 2);
-          if (distMm <= threshold) {
-            activeId = last.id;
-            return last.id;
-          }
-        }
-      }
-
-      const id = nextId++;
       paths.push({
         id, colorIndex, stitchType,
         lineWidthMm: lwMm,
@@ -1555,12 +1527,6 @@ SP.StitchModel = (() => {
       undoStack.push({ op: "newPath", id });
       clearRedo();
       return id;
-    },
-    getActiveLastStitch() {
-      const p = find(activeId);
-      if (!p || p.stitches.length === 0) return null;
-      const s = p.stitches[p.stitches.length - 1];
-      return { xMm: s.xMm, yMm: s.yMm };
     },
     getCurrentStitchType() { return currentStitchType; },
     setCurrentStitchType(t) {
@@ -2986,25 +2952,16 @@ SP.PointerInput = (() => {
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
     const mm = SP.Viewport.pxToMm(p);
     if (!clickPathOpen) {
-      // pathStart kann bei Mehrfachstich einen Vorgänger-Pfad reaktivieren
-      // (Auto-Merge). In diesem Fall hat der aktive Pfad bereits Stiche —
-      // wir setzen lastAcceptedMm auf den letzten dieser Stiche und sparen
-      // uns den Initial-Stich an der Pointerdown-Position, damit kein
-      // sichtbarer Knick / Doppelstich am Übergang entsteht.
+      // Erster Klick einer neuen Linie: Startpunkt setzen. Dieser eine Stich
+      // markiert den Pfadanfang und hat noch keinen Vorgänger — die
+      // Stichlängen-Regel greift erst ab dem zweiten Klick.
       emit("pathStart", { mm });
-      const continuedLast = SP.StitchModel.getActiveLastStitch
-        ? SP.StitchModel.getActiveLastStitch()
-        : null;
-      if (continuedLast) {
-        lastAcceptedMm = continuedLast;
-      } else {
-        emit("stitchAdded", {
-          xMm: mm.xMm, yMm: mm.yMm,
-          type: jumpMode ? T.JUMP : T.NORMAL,
-          clicked: true,
-        });
-        lastAcceptedMm = mm;
-      }
+      emit("stitchAdded", {
+        xMm: mm.xMm, yMm: mm.yMm,
+        type: jumpMode ? T.JUMP : T.NORMAL,
+        clicked: true,
+      });
+      lastAcceptedMm = mm;
       lastSampleMm = mm;
       arcSinceEmitMm = 0;
     } else if (lastAcceptedMm) {
@@ -4970,10 +4927,8 @@ SP.UIShell = (() => {
       });
 
       // Pointer wiring
-      SP.PointerInput.on("pathStart", (d) => {
-        // tryContinueAt erlaubt es newPath, bei Mehrfachstich an einen
-        // nahegelegenen vorherigen Pfad anzuknüpfen.
-        SP.StitchModel.newPath({ tryContinueAt: d && d.mm });
+      SP.PointerInput.on("pathStart", () => {
+        SP.StitchModel.newPath();
       });
       SP.PointerInput.on("stitchAdded", (s) => {
         SP.StitchModel.appendStitch(s);
