@@ -2247,19 +2247,16 @@ SP.PathOps = (() => {
           rows.push(offsetPolyline(stitches, off, axisOverride));
         }
         const out = [];
-        // Serpentine für kurze JUMPs zwischen den Reihen — ABER: die letzte
-        // Reihe läuft immer vorwärts, damit der Pfad unabhängig von der
-        // Reihenzahl immer am natürlichen Pfadende aufhört. Bei geradzahliger
-        // Reihenzahl entsteht dafür ein längerer JUMP zur letzten Reihe; bei
-        // ungerader Reihenzahl ist alles natürlich kurz.
+        // Alle Reihen in derselben Richtung — kein Serpentine. Damit liegen
+        // sämtliche Reihen-Anfänge übereinander am Pfadanfang, sämtliche
+        // Reihen-Enden am Pfadende. Kein visueller Versatz mehr. JUMPs
+        // zwischen den Reihen sind dafür über die volle Pfadlänge zurück
+        // — aber unsichtbar im Renderer und nur Faden-in-Luft auf der
+        // Maschine, also egal.
         for (let r = 0; r < rows.length; r++) {
-          const isLast = r === rows.length - 1;
-          // Reihen 1, 3, 5 … laufen rückwärts (Serpentine). Letzte Reihe
-          // immer vorwärts → konsistentes Endende.
-          const reverse = !isLast && (r % 2 === 1);
-          const ordered = reverse ? rows[r].slice().reverse() : rows[r];
-          for (let k = 0; k < ordered.length; k++) {
-            const s = ordered[k];
+          const row = rows[r];
+          for (let k = 0; k < row.length; k++) {
+            const s = row[k];
             if (r > 0 && k === 0) {
               // Übergang von der vorigen Reihe zu dieser Reihe: unsichtbarer JUMP.
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
