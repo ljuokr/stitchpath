@@ -3431,12 +3431,12 @@ SP.Renderer = (() => {
     if (expanded.length === 0) return;
 
     const ePx = SP.Viewport.getEffectivePxPerMm();
-    // Fadendicke ~0.09 mm. Untergrenze 0.3 px (Hairline).
+    // Fadendicke ~0.063 mm. Untergrenze 0.21 px (Hairline).
     // Tube-Gradient erst ab 1.5 px, Twist-Pattern erst ab 2.0 px Strichbreite
     // — bei normaler Zoomstufe also reine schlanke Linie, beim Reinzoomen
     // entstehen Verlauf und Twist.
-    const threadMm = 0.09;
-    const lwPx = Math.max(0.3, threadMm * ePx);
+    const threadMm = 0.063;
+    const lwPx = Math.max(0.21, threadMm * ePx);
     const useTwist = lwPx >= 2.0;
     const useGradient = lwPx >= 1.5;
 
