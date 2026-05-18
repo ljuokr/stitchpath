@@ -2258,18 +2258,17 @@ SP.PathOps = (() => {
           rows.push(offsetPolyline(stitches, off, axisOverride));
         }
         const out = [];
-        // Alle Reihen in derselben Richtung — kein Serpentine. Damit liegen
-        // sämtliche Reihen-Anfänge übereinander am Pfadanfang, sämtliche
-        // Reihen-Enden am Pfadende. Kein visueller Versatz mehr. JUMPs
-        // zwischen den Reihen sind dafür über die volle Pfadlänge zurück
-        // — aber unsichtbar im Renderer und nur Faden-in-Luft auf der
-        // Maschine, also egal.
+        // Serpentine: gerade Reihen vorwärts, ungerade rückwärts. Übergang
+        // zwischen Reihen ist dann nur eine kurze senkrechte Verschiebung
+        // (= lw/(count-1)). Diese als JUMP markieren, damit sie unsichtbar
+        // bleibt und keinen sichtbaren "Quer-Stich" produziert.
         for (let r = 0; r < rows.length; r++) {
           const row = rows[r];
-          for (let k = 0; k < row.length; k++) {
-            const s = row[k];
+          const ordered = (r % 2 === 0) ? row : row.slice().reverse();
+          for (let k = 0; k < ordered.length; k++) {
+            const s = ordered[k];
             if (r > 0 && k === 0) {
-              // Übergang von der vorigen Reihe zu dieser Reihe: unsichtbarer JUMP.
+              // Übergang von der vorigen Reihe — unsichtbarer JUMP.
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
             } else {
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.NORMAL });
