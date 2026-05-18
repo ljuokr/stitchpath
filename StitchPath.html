@@ -2935,16 +2935,17 @@ SP.PointerInput = (() => {
     if (!clickPathOpen) {
       emit("pathStart", { mm });
     } else if (lastAcceptedMm) {
-      // Zwischen letztem Klick und neuem Klick Stiche interpolieren,
-      // damit das Segment auch bei Klick-Linien Stichlängen-Lücken zeigt.
+      // Zwischen letztem Klick und neuem Klick Stiche im genauen
+      // Stichlängen-Abstand interpolieren — egal wie weit der Klick liegt,
+      // jeder Zwischenstich hat exakt minDistanceMm Länge.
       const ddx = mm.xMm - lastAcceptedMm.xMm;
       const ddy = mm.yMm - lastAcceptedMm.yMm;
       const dist = Math.hypot(ddx, ddy);
-      if (dist >= 2 * minDistanceMm) {
+      if (dist > minDistanceMm) {
         const steps = Math.floor(dist / minDistanceMm);
         const ux = ddx / dist, uy = ddy / dist;
         const startX = lastAcceptedMm.xMm, startY = lastAcceptedMm.yMm;
-        for (let i = 1; i < steps; i++) {
+        for (let i = 1; i <= steps; i++) {
           const t = i * minDistanceMm;
           emit("stitchAdded", {
             xMm: startX + ux * t,
