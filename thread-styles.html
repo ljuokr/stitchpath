@@ -169,6 +169,60 @@ function rgbToHsl(hex) {
   return [h*60, s, l];
 }
 
+// ===== Procedurale Pattern (Fasern, Twist, Stoffgewebe) =====
+function makeTwistPattern(color, angleDeg) {
+  const off = document.createElement("canvas");
+  off.width = 16; off.height = 16;
+  const c = off.getContext("2d");
+  c.fillStyle = "rgba(0,0,0,0)"; c.fillRect(0, 0, 16, 16);
+  // Schräge helle Striche
+  c.strokeStyle = lighten(color, 0.55);
+  c.globalAlpha = 0.55;
+  c.lineWidth = 1.2;
+  c.translate(8, 8);
+  c.rotate((angleDeg * Math.PI) / 180);
+  c.translate(-8, -8);
+  for (let i = -20; i <= 32; i += 6) {
+    c.beginPath();
+    c.moveTo(i, 0);
+    c.lineTo(i + 16, 16);
+    c.stroke();
+  }
+  return c.canvas;
+}
+function makeFiberPattern(color) {
+  const off = document.createElement("canvas");
+  off.width = 20; off.height = 6;
+  const c = off.getContext("2d");
+  // Längs-Fasern (horizontal): wechselnd hell/dunkel
+  for (let y = 0; y < 6; y++) {
+    const t = y / 5;
+    const f = 0.5 + 0.5 * Math.cos(t * Math.PI * 2);
+    c.fillStyle = f > 0.6 ? lighten(color, 0.25 * f) : darken(color, 0.2 * (1 - f));
+    c.fillRect(0, y, 20, 1);
+  }
+  // Feine Schwankungen längs
+  c.globalAlpha = 0.25;
+  for (let i = 0; i < 8; i++) {
+    c.fillStyle = Math.random() < 0.5 ? "#000" : "#fff";
+    c.fillRect(Math.floor(Math.random() * 20), Math.floor(Math.random() * 6), 1, 1);
+  }
+  return c.canvas;
+}
+function makeFabricPattern() {
+  const off = document.createElement("canvas");
+  off.width = 6; off.height = 6;
+  const c = off.getContext("2d");
+  c.fillStyle = "rgba(0,0,0,0)"; c.fillRect(0, 0, 6, 6);
+  c.fillStyle = "rgba(0,0,0,0.07)";
+  c.fillRect(0, 0, 3, 3);
+  c.fillRect(3, 3, 3, 3);
+  c.fillStyle = "rgba(255,255,255,0.06)";
+  c.fillRect(3, 0, 3, 3);
+  c.fillRect(0, 3, 3, 3);
+  return c.canvas;
+}
+
 function tracePath(ctx, pts) {
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
@@ -437,14 +491,12 @@ const STYLES = [
   {
     name: "Konische Stiche", desc: "Faden wird leicht verjüngt dargestellt — wie ein realer Einstich.",
     render(ctx, pts, w, color) {
-      // Zeichne Segment-für-Segment mit variierender Breite (Tapered)
       for (let i = 0; i < pts.length - 1; i++) {
         const a = pts[i], b = pts[i+1];
         const dx = b.x - a.x, dy = b.y - a.y;
         const L = Math.hypot(dx, dy) || 1;
         const nx = -dy / L, ny = dx / L;
         const wThick = w * 0.55, wThin = w * 0.15;
-        // Trapezoid: dick an a, dünn an b — alternierend
         const wA = (i % 2 === 0) ? wThick : wThin;
         const wB = (i % 2 === 0) ? wThin : wThick;
         ctx.fillStyle = color;
@@ -455,6 +507,258 @@ const STYLES = [
         ctx.lineTo(a.x - nx*wA, a.y - ny*wA);
         ctx.closePath();
         ctx.fill();
+      }
+    },
+  },
+  // ===== Hochauflösende Texturen 21–26 =====
+  {
+    name: "Twist-Pattern", desc: "Schräges Twist-Pattern wird IN den Faden geclippt — sichtbar gedrehte Fasern.",
+    render(ctx, pts, w, color) {
+      // Tube-Verlauf als Basis
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.35));
+      grad.addColorStop(0.5, color);
+      grad.addColorStop(1, darken(color, 0.4));
+      strokeAlong(ctx, pts, w, grad);
+      // Twist-Pattern nur im Stroke-Bereich via Clipping
+      ctx.save();
+      ctx.lineWidth = w; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      tracePath(ctx, pts);
+      ctx.strokeStyle = ctx.createPattern(makeTwistPattern(color, 45), "repeat");
+      ctx.stroke();
+      ctx.restore();
+    },
+  },
+  {
+    name: "Faser-Pattern + Glanz", desc: "Längsfasern-Textur + Glanzlinie + leichter Schlagschatten.",
+    render(ctx, pts, w, color) {
+      // Schatten
+      ctx.save();
+      ctx.shadowColor = "rgba(20,15,10,0.4)";
+      ctx.shadowBlur = w * 0.3; ctx.shadowOffsetY = w * 0.22;
+      strokeAlong(ctx, pts, w, color);
+      ctx.restore();
+      // Tube-Verlauf
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.38));
+      grad.addColorStop(0.5, color);
+      grad.addColorStop(1, darken(color, 0.4));
+      strokeAlong(ctx, pts, w, grad);
+      // Längs-Fasertextur
+      ctx.save();
+      ctx.lineWidth = w; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      tracePath(ctx, pts);
+      ctx.strokeStyle = ctx.createPattern(makeFiberPattern(color), "repeat");
+      ctx.globalAlpha = 0.4;
+      ctx.stroke();
+      ctx.restore();
+      // Spitzlicht
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.22})), w*0.1, "rgba(255,255,255,0.6)");
+      ctx.restore();
+    },
+  },
+  {
+    name: "EzStitch-Klon", desc: "Versucht den Look von ezstitchdigitizing.com nachzubilden: weicher Schatten, Tube-Verlauf, Twist-Hatch, einzelne Stiche sichtbar.",
+    render(ctx, pts, w, color) {
+      // 1) Weicher dunkler Schatten unter dem Faden
+      ctx.save();
+      ctx.shadowColor = "rgba(40,30,20,0.55)";
+      ctx.shadowBlur = w * 0.45; ctx.shadowOffsetX = w * 0.08; ctx.shadowOffsetY = w * 0.25;
+      strokeAlong(ctx, pts, w, "rgba(0,0,0,1)");
+      ctx.restore();
+      // 2) Tube-Verlauf als Basis
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.5));
+      grad.addColorStop(0.4, lighten(color, 0.1));
+      grad.addColorStop(0.6, color);
+      grad.addColorStop(1, darken(color, 0.5));
+      strokeAlong(ctx, pts, w, grad);
+      // 3) Twist-Pattern geclippt in den Faden
+      ctx.save();
+      ctx.lineWidth = w; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      tracePath(ctx, pts);
+      ctx.strokeStyle = ctx.createPattern(makeTwistPattern(color, 32), "repeat");
+      ctx.globalAlpha = 0.7;
+      ctx.stroke();
+      ctx.restore();
+      // 4) Harte schmale Glanzlinie ganz oben
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.25})), w*0.1, "rgba(255,255,255,0.85)");
+      ctx.restore();
+      // 5) Einzelne Stich-Trennstriche quer
+      ctx.save();
+      ctx.strokeStyle = "rgba(0,0,0,0.22)";
+      ctx.lineWidth = 0.6;
+      for (let i = 0; i < pts.length - 1; i += 4) {
+        const a = pts[i], b2 = pts[i+1] || a;
+        const dx = b2.x - a.x, dy = b2.y - a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const nx = -dy / L, ny = dx / L;
+        ctx.beginPath();
+        ctx.moveTo(a.x - nx*w*0.42, a.y - ny*w*0.42);
+        ctx.lineTo(a.x + nx*w*0.42, a.y + ny*w*0.42);
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+  },
+  {
+    name: "Glasfaden", desc: "Glasiger Look mit innerer Lichtreflexion und Transparenz-Andeutung.",
+    render(ctx, pts, w, color) {
+      // Halbtransparente Basis
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.7));
+      grad.addColorStop(0.3, lighten(color, 0.2));
+      grad.addColorStop(0.6, color);
+      grad.addColorStop(1, lighten(color, 0.5));
+      strokeAlong(ctx, pts, w, grad);
+      ctx.restore();
+      // Dunkle dünne Randlinie
+      strokeAlong(ctx, pts, w * 1.05, "rgba(0,0,0,0)"); // Spacer
+      ctx.save();
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.strokeStyle = darken(color, 0.4);
+      ctx.lineWidth = 0.6;
+      ctx.globalAlpha = 0.5;
+      // Obere und untere Konturlinie
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.48})), 0.6, darken(color, 0.45));
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y + w*0.48})), 0.6, darken(color, 0.55));
+      ctx.restore();
+      // Heller Reflexstreifen oben
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.32})), w*0.06, "rgba(255,255,255,0.95)");
+    },
+  },
+  {
+    name: "Twisted Rope", desc: "Klare Tau-/Seil-Struktur mit deutlich sichtbarer Drehung.",
+    render(ctx, pts, w, color) {
+      // Basis-Tube
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.25));
+      grad.addColorStop(0.5, color);
+      grad.addColorStop(1, darken(color, 0.35));
+      strokeAlong(ctx, pts, w, grad);
+      // Twist-Wellen entlang des Fadens (sin-Modulierte helle Patches)
+      ctx.save();
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      // Wir zeichnen kurze schräge Striche entlang dem Pfad in regelmässigen Abständen
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b2 = pts[i+1];
+        const dx = b2.x - a.x, dy = b2.y - a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const ux = dx/L, uy = dy/L;
+        const nx = -uy, ny = ux;
+        // Twist-Phase: oszilliert über Pfadlänge
+        const phase = i / 3;
+        const off = Math.sin(phase) * w * 0.3;
+        const offNext = Math.sin(phase + 0.33) * w * 0.3;
+        // Heller schräger Strich
+        ctx.strokeStyle = lighten(color, 0.45);
+        ctx.lineWidth = w * 0.22;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(a.x + nx*off, a.y + ny*off);
+        ctx.lineTo(b2.x + nx*offNext, b2.y + ny*offNext);
+        ctx.stroke();
+        // Dunkler schräger Strich gegenüberliegend
+        ctx.strokeStyle = darken(color, 0.45);
+        ctx.beginPath();
+        ctx.moveTo(a.x - nx*off, a.y - ny*off);
+        ctx.lineTo(b2.x - nx*offNext, b2.y - ny*offNext);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    },
+  },
+  {
+    name: "Stich-Beans", desc: "Jeder einzelne Stich als eigene 3D-Bean — wie eine Embroidery-Software-Vorschau.",
+    render(ctx, pts, w, color) {
+      // Sample-Stitches alle ~6 px entlang des Pfads
+      // Zuerst kumulierte Bogenlänge
+      const arc = [0];
+      for (let i = 1; i < pts.length; i++) {
+        arc.push(arc[i-1] + Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y));
+      }
+      const total = arc[arc.length - 1];
+      const stitchLen = Math.max(8, w * 1.2); // Ein Stich pro stitchLen px
+      const N = Math.max(2, Math.round(total / stitchLen));
+      // Sample-Punkte
+      function pointAt(s) {
+        if (s <= 0) return pts[0];
+        if (s >= total) return pts[pts.length-1];
+        for (let i = 1; i < arc.length; i++) {
+          if (arc[i] >= s) {
+            const t = (s - arc[i-1]) / (arc[i] - arc[i-1]);
+            return {
+              x: pts[i-1].x + (pts[i].x - pts[i-1].x) * t,
+              y: pts[i-1].y + (pts[i].y - pts[i-1].y) * t,
+            };
+          }
+        }
+        return pts[pts.length-1];
+      }
+      for (let k = 0; k < N; k++) {
+        const s0 = (k / N) * total;
+        const s1 = ((k + 1) / N) * total;
+        const a = pointAt(s0);
+        const b = pointAt(s1);
+        // Bean = abgerundetes Rechteck entlang Segment
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const ux = dx/L, uy = dy/L;
+        const nx = -uy, ny = ux;
+        const r = w * 0.45;
+        // Schatten
+        ctx.save();
+        ctx.shadowColor = "rgba(20,15,10,0.55)";
+        ctx.shadowBlur = w * 0.3; ctx.shadowOffsetY = w * 0.15;
+        ctx.fillStyle = darken(color, 0.2);
+        ctx.beginPath();
+        // Bean-Polygon
+        const corners = [
+          {x: a.x + nx*r, y: a.y + ny*r},
+          {x: b.x + nx*r, y: b.y + ny*r},
+          {x: b.x + ux*r*0.4 - nx*r, y: b.y + uy*r*0.4 - ny*r},
+          {x: a.x - ux*r*0.4 - nx*r, y: a.y - uy*r*0.4 - ny*r},
+        ];
+        ctx.moveTo(corners[0].x, corners[0].y);
+        ctx.lineTo(corners[1].x, corners[1].y);
+        ctx.lineTo(corners[2].x, corners[2].y);
+        ctx.lineTo(corners[3].x, corners[3].y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        // Tube-Gradient pro Bean
+        const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+        const grad = ctx.createLinearGradient(cx + nx*r, cy + ny*r, cx - nx*r, cy - ny*r);
+        grad.addColorStop(0, lighten(color, 0.5));
+        grad.addColorStop(0.45, color);
+        grad.addColorStop(1, darken(color, 0.5));
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x, corners[0].y);
+        ctx.lineTo(corners[1].x, corners[1].y);
+        ctx.lineTo(corners[2].x, corners[2].y);
+        ctx.lineTo(corners[3].x, corners[3].y);
+        ctx.closePath();
+        ctx.fill();
+        // Glanzlinie
+        ctx.strokeStyle = "rgba(255,255,255,0.7)";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x + ux*r*0.3, corners[0].y + uy*r*0.3);
+        ctx.lineTo(corners[1].x - ux*r*0.3, corners[1].y - uy*r*0.3);
+        ctx.stroke();
       }
     },
   },
@@ -525,13 +829,16 @@ function drawAll() {
     canvas.height = Math.floor(rect.height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // Hintergrund: Stoff
+    // Hintergrund: Stoff mit Webmuster (Köper-/Leinwand-Optik)
     ctx.fillStyle = fabric;
     ctx.fillRect(0, 0, rect.width, rect.height);
-    // Stoff-Textur (leichte Rauschstruktur, dezent)
     ctx.save();
-    ctx.globalAlpha = 0.07;
-    for (let i = 0; i < 40; i++) {
+    const fabricPat = ctx.createPattern(makeFabricPattern(), "repeat");
+    ctx.fillStyle = fabricPat;
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    // Sehr feines Korn-Rauschen (Garn-Struktur)
+    ctx.globalAlpha = 0.04;
+    for (let i = 0; i < 80; i++) {
       const x = Math.random() * rect.width;
       const y = Math.random() * rect.height;
       ctx.fillStyle = Math.random() < 0.5 ? "#000" : "#fff";
