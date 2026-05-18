@@ -1907,6 +1907,55 @@ SP.PathOps = (() => {
   // perpendikulären Achse. Jede Reihe ist eine 1:1-Kopie der Mittellinie,
   // um einen festen Vektor verschoben — kein rotierender "Pinsel" beim
   // Zeichnen, alle Punkte stehen sofort fest.
+  // Resampelt eine Polyline auf gleichmässige Stich-Abstände entlang der
+  // Bogenlänge. Der erste und letzte Punkt bleiben exakt erhalten; die
+  // Zwischenpunkte liegen alle stepMm voneinander entfernt. Wenn die
+  // Gesamtlänge kein ganzzahliges Vielfaches von stepMm ist, wird der
+  // letzte Stich entsprechend etwas kürzer ausfallen.
+  function resamplePolyline(stitches, stepMm) {
+    if (!stitches || stitches.length < 2) {
+      return stitches ? stitches.map((s) => ({ ...s })) : [];
+    }
+    const step = (typeof stepMm === "number" && stepMm > 0) ? stepMm : 1.0;
+    // Kumulierte Bogenlänge
+    const arc = new Float64Array(stitches.length);
+    for (let i = 1; i < stitches.length; i++) {
+      arc[i] = arc[i - 1] + Math.hypot(
+        stitches[i].xMm - stitches[i - 1].xMm,
+        stitches[i].yMm - stitches[i - 1].yMm
+      );
+    }
+    const total = arc[arc.length - 1];
+    if (total < step * 0.5) {
+      // Pfad sehr kurz: nur Anfang und Ende übernehmen.
+      return [
+        { ...stitches[0] },
+        { ...stitches[stitches.length - 1] },
+      ];
+    }
+    const out = [{ ...stitches[0] }];
+    let j = 1;
+    let s = step;
+    while (s < total - step * 0.5) {
+      while (j < arc.length - 1 && arc[j] < s) j++;
+      const segStart = arc[j - 1];
+      const segEnd = arc[j];
+      const segLen = segEnd - segStart;
+      const t = (segLen > 1e-9) ? (s - segStart) / segLen : 0;
+      const a = stitches[j - 1], b = stitches[j];
+      out.push({
+        xMm: a.xMm + (b.xMm - a.xMm) * t,
+        yMm: a.yMm + (b.yMm - a.yMm) * t,
+        type: a.type,
+      });
+      s += step;
+    }
+    // Letzten Punkt exakt setzen (preserviert die Endposition des Pfads).
+    const last = stitches[stitches.length - 1];
+    out.push({ xMm: last.xMm, yMm: last.yMm, type: last.type });
+    return out;
+  }
+
   function offsetPolyline(stitches, offsetMm, axisOverride) {
     if (offsetMm === 0 || stitches.length < 2) return stitches.map((s) => ({ ...s }));
     const axis = axisOverride || computeParallelAxis(stitches);
@@ -2236,18 +2285,19 @@ SP.PathOps = (() => {
       const stepMm = (typeof opts.stitchDistMm === "number" && opts.stitchDistMm > 0)
         ? opts.stitchDistMm : 1.0;
       if (stitchType === "running") {
-        // Geradstich folgt der Hand 1:1 — kein Glätten, damit feines
-        // "Krickeln" und Detail-Konturen erhalten bleiben.
-        return stitches.map((s) => ({ ...s }));
+        // Pfad-Stitches sind durch Hand-Drag mit variabler Geschwindigkeit
+        // ungleichmässig gespaced. Vor dem Export auf exakte stepMm-Schritte
+        // resampeln — damit jeder gestickte Stich genau stepMm lang ist.
+        return resamplePolyline(stitches, stepMm);
       }
       if (stitchType === "triple") {
-        // Mehrfachstich folgt der Hand 1:1 (keine Glättung). Die parallelen
-        // Reihen werden als echte Parallelen erzeugt — d. h. jede Reihe hält
-        // konstant `off` mm senkrechten Abstand zur Mittellinie (Miter-Join an
-        // Ecken), nicht nur eine "Drehung um den Mittelstrich". Übergänge
-        // zwischen Reihen sind JUMP-Stiche (unsichtbar verbunden).
+        // Mehrfachstich: Centerline auf exakt stepMm resampeln, dann jede
+        // parallele Reihe als Translate dieses resampleten Centerline
+        // erzeugen → alle Reihen haben mathematisch garantiert dieselbe
+        // Anzahl Stiche und identische Längen.
         const count = multiCount;
-        if (count <= 1) return stitches.map((s) => ({ ...s }));
+        if (count <= 1) return resamplePolyline(stitches, stepMm);
+        const resampled = resamplePolyline(stitches, stepMm);
         // parallelAxis: vom Radierer eingefroren — damit die parallelen
         // Reihen nach einem Erase nicht plötzlich neu ausgerichtet werden.
         const axisOverride = opts.parallelAxis || null;
@@ -2255,7 +2305,7 @@ SP.PathOps = (() => {
         for (let r = 0; r < count; r++) {
           const t = (count === 1) ? 0.5 : r / (count - 1); // 0..1
           const off = -lw / 2 + t * lw;
-          rows.push(offsetPolyline(stitches, off, axisOverride));
+          rows.push(offsetPolyline(resampled, off, axisOverride));
         }
         const out = [];
         // Serpentine: gerade Reihen vorwärts, ungerade rückwärts.
