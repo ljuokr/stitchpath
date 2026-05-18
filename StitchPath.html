@@ -2239,14 +2239,19 @@ SP.PathOps = (() => {
           rows.push(offsetPolyline(stitches, off, axisOverride));
         }
         const out = [];
-        // Alle Reihen in derselben Richtung — so liegen alle Anfänge an einem
-        // Ende übereinander und das Stickbild wirkt nicht "wechselnd versetzt".
-        // Der JUMP zwischen den Reihen ist dadurch etwas länger, bleibt aber
-        // optisch unsichtbar.
+        // Serpentine für kurze JUMPs zwischen den Reihen — ABER: die letzte
+        // Reihe läuft immer vorwärts, damit der Pfad unabhängig von der
+        // Reihenzahl immer am natürlichen Pfadende aufhört. Bei geradzahliger
+        // Reihenzahl entsteht dafür ein längerer JUMP zur letzten Reihe; bei
+        // ungerader Reihenzahl ist alles natürlich kurz.
         for (let r = 0; r < rows.length; r++) {
-          const row = rows[r];
-          for (let k = 0; k < row.length; k++) {
-            const s = row[k];
+          const isLast = r === rows.length - 1;
+          // Reihen 1, 3, 5 … laufen rückwärts (Serpentine). Letzte Reihe
+          // immer vorwärts → konsistentes Endende.
+          const reverse = !isLast && (r % 2 === 1);
+          const ordered = reverse ? rows[r].slice().reverse() : rows[r];
+          for (let k = 0; k < ordered.length; k++) {
+            const s = ordered[k];
             if (r > 0 && k === 0) {
               // Übergang von der vorigen Reihe zu dieser Reihe: unsichtbarer JUMP.
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
