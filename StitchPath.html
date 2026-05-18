@@ -5175,12 +5175,14 @@ SP.UIShell = (() => {
       refreshHoopShort();
       $("hoopW").value = SP.Hoop.getSize().wMm;
       $("hoopH").value = SP.Hoop.getSize().hMm;
-      $("distMm").value = SP.PointerInput.getMinDistanceMm();
-      $("distLabel").textContent = SP.PointerInput.getMinDistanceMm().toFixed(1);
       $("lineWidthMm").value = SP.StitchModel.getLineWidthMm();
       $("lwLabel").textContent = SP.StitchModel.getLineWidthMm().toFixed(1);
       $("multiCount").value = SP.StitchModel.getMultiCount();
       $("multiLabel").textContent = String(SP.StitchModel.getMultiCount());
+      // Stichlänge IMMER auf den Typ-Default zurücksetzen — überschreibt
+      // einen evtl. abgespeicherten, nicht mehr sinnvollen Wert. Der
+      // Aufruf von refreshStitchTypeButtons() bewirkt das via
+      // refreshControlsForStitchType().
       refreshStitchTypeButtons();
       syncBgInputs();
       refreshVorlagebar();
