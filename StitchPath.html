@@ -3121,6 +3121,24 @@ SP.PointerInput = (() => {
     else if (drawing) {
       drawing = false;
       if (pressMoved) {
+        // Bevor wir die Linie schliessen: wenn die letzte Cursor-Position
+        // mindestens eine HALBE Stichlänge vom letzten gesetzten Stich
+        // entfernt liegt, einen letzten Stich mit exakt minDistanceMm in
+        // Cursor-Richtung anhängen. So entspricht die Stich-Anzahl der
+        // Erwartung (round statt floor), ohne dass die Stichlänge variiert.
+        if (lastAcceptedMm && lastSampleMm) {
+          const ddx = lastSampleMm.xMm - lastAcceptedMm.xMm;
+          const ddy = lastSampleMm.yMm - lastAcceptedMm.yMm;
+          const dist = Math.hypot(ddx, ddy);
+          if (dist >= minDistanceMm * 0.5 && dist > 1e-6) {
+            const ux = ddx / dist, uy = ddy / dist;
+            emit("stitchAdded", {
+              xMm: lastAcceptedMm.xMm + ux * minDistanceMm,
+              yMm: lastAcceptedMm.yMm + uy * minDistanceMm,
+              type: jumpMode ? T.JUMP : T.NORMAL,
+            });
+          }
+        }
         // War ein Drag → Linie schliessen
         const wasOpen = clickPathOpen;
         clickPathOpen = false;
