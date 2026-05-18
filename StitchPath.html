@@ -1896,58 +1896,37 @@ SP.PathOps = (() => {
     return { x: Math.cos(snapped), y: Math.sin(snapped) };
   }
 
-  // Mehrfachstich-Offset: echte Offset-Kurven mit geglätteter Tangente.
-  // Jeder Punkt wird in seine LOKALE perpendikuläre Richtung verschoben,
-  // aber die Tangente wird über ein Fenster von SMOOTH_TANGENT_MM gemittelt
-  // — damit Ecken nicht pinchen und gerade Strecken sich identisch wie eine
-  // Translation verhalten. Resultat: konstante perpendikuläre Distanz
-  // entlang des gesamten Pfads, keine sichtbaren Versätze auf Kurven.
-  // axisOverride wird ignoriert für nicht-degenerate Pfade — wir verwenden
-  // immer die geglättete lokale Tangente. (Der Override aus dem Radierer
-  // war eine Erinnerung an die alte Translate-Methode; mit Offset-Kurven
-  // ist die geometrische Form bereits stabil.)
-  const SMOOTH_TANGENT_MM = 4.0;
+  // Mehrfachstich-Offset: echte Offset-Kurven mit Bissektor-Tangente
+  // (Mittelwert aus ein- und ausgehendem Segment pro Punkt). Lokal stabil —
+  // nur der allerletzte Punkt ändert sich minimal, wenn ein neuer Stich
+  // dahinter kommt. Alle früheren Punkte bleiben unverändert.
+  // Auf geraden Strecken identisch zur reinen Translation (Tangente ist
+  // überall gleich), auf Kurven echte parallele Schienen (konstanter
+  // perpendikulärer Abstand).
   function offsetPolyline(stitches, offsetMm, _axisOverride) {
     if (offsetMm === 0 || stitches.length < 2) return stitches.map((s) => ({ ...s }));
     const n = stitches.length;
-    // Kumulierte Bogenlänge
-    const arc = new Float64Array(n);
-    for (let i = 1; i < n; i++) {
-      arc[i] = arc[i - 1] + Math.hypot(
-        stitches[i].xMm - stitches[i - 1].xMm,
-        stitches[i].yMm - stitches[i - 1].yMm
-      );
-    }
-    if (arc[n - 1] < 1e-6) return stitches.map((s) => ({ ...s }));
-    // Geglättete Tangente pro Punkt: gewichtete Summe der Segmentrichtungen
-    // innerhalb von ±SMOOTH_TANGENT_MM um den Punkt.
     const out = new Array(n);
-    // Sliding-Window-Indizes
-    let lo = 0, hi = 0;
     for (let i = 0; i < n; i++) {
-      const center = arc[i];
-      const minS = center - SMOOTH_TANGENT_MM;
-      const maxS = center + SMOOTH_TANGENT_MM;
-      while (hi < n - 1 && arc[hi + 1] < maxS) hi++;
-      while (lo < n - 1 && arc[lo + 1] < minS) lo++;
-      let dx = 0, dy = 0;
-      for (let j = Math.max(0, lo - 1); j <= Math.min(n - 2, hi); j++) {
-        const segMid = (arc[j] + arc[j + 1]) / 2;
-        const dist = Math.abs(segMid - center);
-        if (dist > SMOOTH_TANGENT_MM) continue;
-        const weight = 1 - dist / SMOOTH_TANGENT_MM;
-        const segDx = stitches[j + 1].xMm - stitches[j].xMm;
-        const segDy = stitches[j + 1].yMm - stitches[j].yMm;
-        const L = Math.hypot(segDx, segDy);
-        if (L > 0) {
-          dx += (segDx / L) * weight;
-          dy += (segDy / L) * weight;
-        }
+      let tx = 0, ty = 0;
+      // Eingehendes Segment
+      if (i > 0) {
+        const dx = stitches[i].xMm - stitches[i - 1].xMm;
+        const dy = stitches[i].yMm - stitches[i - 1].yMm;
+        const L = Math.hypot(dx, dy);
+        if (L > 0) { tx += dx / L; ty += dy / L; }
       }
-      let len = Math.hypot(dx, dy);
-      if (len < 1e-6) { dx = 1; dy = 0; len = 1; }
-      const tx = dx / len, ty = dy / len;
-      // Perpendikulär = (-ty, tx). Offset in diese Richtung.
+      // Ausgehendes Segment
+      if (i < n - 1) {
+        const dx = stitches[i + 1].xMm - stitches[i].xMm;
+        const dy = stitches[i + 1].yMm - stitches[i].yMm;
+        const L = Math.hypot(dx, dy);
+        if (L > 0) { tx += dx / L; ty += dy / L; }
+      }
+      let L = Math.hypot(tx, ty);
+      if (L < 1e-6) { tx = 1; ty = 0; L = 1; }
+      tx /= L; ty /= L;
+      // Perpendikulär = (-ty, tx)
       out[i] = {
         xMm: stitches[i].xMm + (-ty) * offsetMm,
         yMm: stitches[i].yMm + (tx) * offsetMm,
