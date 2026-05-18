@@ -2314,7 +2314,8 @@ SP.PathOps = (() => {
       const fallbackMc = SP.StitchModel.getMultiCount();
       const fallbackDist = SP.PointerInput && SP.PointerInput.getMinDistanceMm
         ? SP.PointerInput.getMinDistanceMm() : 1.0;
-      const TIE_MM = 1.2; // Tie-Stiche-Länge (typisch 1–1.5 mm)
+      // Kein Tie-In, kein Tie-Off, keine künstlichen Verlängerungen — der
+      // DST enthält genau die Stiche, die im Renderer sichtbar sind.
       let lastColor = null;
       for (const p of paths) {
         if (!p.stitches.length) continue;
@@ -2333,57 +2334,12 @@ SP.PathOps = (() => {
         }
         const first = expanded[0];
         flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.JUMP });
-        // Sonderfall: Pfad mit nur 1 Stich (z. B. ein vereinzelter Klick).
-        // Sticken benötigt mindestens ein paar Stiche, um den Faden zu
-        // verankern. Wir erzeugen daher einen kleinen Plus-förmigen Anker
-        // um den Klickpunkt herum (rechts → zurück → links → zurück).
-        if (expanded.length === 1) {
-          flat.push({ xMm: first.xMm + TIE_MM, yMm: first.yMm, type: T.NORMAL });
-          flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.NORMAL });
-          flat.push({ xMm: first.xMm - TIE_MM, yMm: first.yMm, type: T.NORMAL });
-          flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.NORMAL });
-          lastColor = p.colorIndex;
-          continue;
-        }
-        // Tie-In: zwei kurze Verriegelungsstiche am Pfadanfang in Richtung
-        // des nächsten Stichs, damit der Faden gesichert ist. Bei sehr
-        // kleinen Strokes (Punkte, i-Tüpfel) wird der Tie auf die Länge
-        // des Segments begrenzt, damit der Faden-Anker im Buchstaben bleibt.
-        if (expanded.length >= 2) {
-          const next = expanded[1];
-          const dx = next.xMm - first.xMm, dy = next.yMm - first.yMm;
-          const d = Math.hypot(dx, dy);
-          if (d > 0.1) {
-            const ux = dx / d, uy = dy / d;
-            const tieLen = Math.min(TIE_MM, d * 1.2);
-            const tx = first.xMm + ux * tieLen;
-            const ty = first.yMm + uy * tieLen;
-            flat.push({ xMm: tx, yMm: ty, type: T.NORMAL });
-            flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.NORMAL });
-          }
-        }
         for (let i = 1; i < expanded.length; i++) {
           const s = expanded[i];
           flat.push({
             xMm: s.xMm, yMm: s.yMm,
             type: s.type === T.JUMP ? T.JUMP : T.NORMAL,
           });
-        }
-        // Tie-Off: zwei kurze Verriegelungsstiche am Pfadende rückwärts in
-        // Richtung des vorletzten Stichs.
-        if (expanded.length >= 2) {
-          const lastS = expanded[expanded.length - 1];
-          const prev = expanded[expanded.length - 2];
-          const dx = prev.xMm - lastS.xMm, dy = prev.yMm - lastS.yMm;
-          const d = Math.hypot(dx, dy);
-          if (d > 0.1) {
-            const ux = dx / d, uy = dy / d;
-            const tieLen = Math.min(TIE_MM, d * 1.2);
-            const tx = lastS.xMm + ux * tieLen;
-            const ty = lastS.yMm + uy * tieLen;
-            flat.push({ xMm: tx, yMm: ty, type: T.NORMAL });
-            flat.push({ xMm: lastS.xMm, yMm: lastS.yMm, type: T.NORMAL });
-          }
         }
         lastColor = p.colorIndex;
       }
@@ -3485,8 +3441,8 @@ SP.Renderer = (() => {
       grad.addColorStop(1, shade(color, -0.35));
     }
 
-    // Per-Segment-Rendering mit 5 %-Lücke an Stich-Grenzen (sichtbare
-    // Stich-Trennung). An Klick-Punkten und Split-Punkten keine Lücke.
+    // Direkt-Rendering ohne Shrinkage — der gezeichnete Pfad entspricht
+    // 1:1 den im DST exportierten Stichen.
     function drawSegments(style) {
       ctx.strokeStyle = style;
       ctx.beginPath();
@@ -3499,11 +3455,8 @@ SP.Renderer = (() => {
         const dx = bp.x - ap.x, dy = bp.y - ap.y;
         const len = Math.hypot(dx, dy);
         if (len < 1) continue;
-        const shrinkA = (a.clicked || a.split) ? 0 : len * 0.05;
-        const shrinkB = (b.clicked || b.split) ? 0 : len * 0.05;
-        const ux = dx / len, uy = dy / len;
-        ctx.moveTo(ap.x + ux * shrinkA, ap.y + uy * shrinkA);
-        ctx.lineTo(bp.x - ux * shrinkB, bp.y - uy * shrinkB);
+        ctx.moveTo(ap.x, ap.y);
+        ctx.lineTo(bp.x, bp.y);
       }
       ctx.stroke();
     }
