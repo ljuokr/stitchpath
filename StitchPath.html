@@ -1714,10 +1714,13 @@ SP.StitchModel = (() => {
       const r2 = radiusMm * radiusMm;
       const out = [];
       let changed = false;
-      // Vor dem eigentlichen Erase: bei Mehrfachstich die Hauptachse der
-      // parallelen Reihen einfrieren, damit das Radieren am Anfang nicht
-      // die gesamte Bahn rotieren lässt. Keine Glättung mehr — gezeichnete
-      // Stiche bleiben in Position.
+      // Vor dem eigentlichen Erase:
+      // - Bei Mehrfachstich (triple) die Hauptachse der parallelen Reihen
+      //   einfrieren, damit das Radieren am Anfang nicht die gesamte Bahn
+      //   rotieren lässt.
+      // - Bei Zickzack/Satin (zigzag) die geglättete Mittellinie "einbacken",
+      //   damit nach dem Erase die Bahn nicht erneut umgeformt wird
+      //   (sonst rutscht der ganze Strang, sobald der Anfang verändert wird).
       for (const p of paths) {
         if (p.smoothFrozen) continue;
         if (p.stitches.length < 2) continue;
@@ -1729,6 +1732,22 @@ SP.StitchModel = (() => {
           const axis = SP.PathOps.computeParallelAxis(p.stitches);
           if (axis) {
             p.parallelAxis = axis;
+            p.smoothFrozen = true;
+          }
+        } else if (
+          p.stitchType === "zigzag" &&
+          p.stitches.length >= 3 &&
+          typeof SP.PathOps.smoothZigzagCenterline === "function"
+        ) {
+          const lw = (typeof p.lineWidthMm === "number")
+            ? p.lineWidthMm : lineWidthMm;
+          const baked = SP.PathOps.smoothZigzagCenterline(p.stitches, lw);
+          if (baked && baked.length === p.stitches.length) {
+            for (let i = 0; i < baked.length; i++) {
+              baked[i].clicked = !!p.stitches[i].clicked;
+              baked[i].type = p.stitches[i].type;
+            }
+            p.stitches = baked;
             p.smoothFrozen = true;
           }
         } else {
@@ -2306,10 +2325,19 @@ SP.PathOps = (() => {
         return out;
       }
       if (stitchType === "zigzag") {
-        // Mittellinie 1:1 verwenden — gezeichnete Stiche werden NICHT mehr
-        // geglättet. Der Satin-Zickzack wird direkt aus den gesetzten Punkten
-        // generiert; jede Ecke und jeder Klick bleibt exakt erhalten.
-        return makeZigzag(stitches, stepMm, lw / 2);
+        // Mittellinie wird vor der Satin-Generierung physikalisch geglättet
+        // (mm-basierter Tiefpass über die Bogenlänge). Der Filterradius
+        // skaliert mit der Satinbreite (Pinselradius lw/2), sodass die
+        // Glättung unabhängig von der Stichlänge gleich wirkt — auch bei
+        // sehr kurzer Stichlänge mit vielen dicht beieinander liegenden
+        // Punkten wird Handzittern zuverlässig herausgefiltert.
+        // smoothFrozen: wird vom Radierer gesetzt, damit nach dem Erase
+        // die bereits eingefrorene Mittellinie nicht erneut umgeformt
+        // wird. Glättung greift NUR bei Satin/Zickzack.
+        const smoothed = opts.smoothFrozen
+          ? stitches
+          : smoothZigzagCenterline(stitches, lw);
+        return makeZigzag(smoothed, stepMm, lw / 2);
       }
       return stitches.map((s) => ({ ...s }));
     },
