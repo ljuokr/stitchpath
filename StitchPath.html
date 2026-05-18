@@ -3375,6 +3375,39 @@ SP.Renderer = (() => {
     return "rgb(" + r + "," + g + "," + b + ")";
   }
 
+  // Cache für Twist-Pattern (per Farbe). Wird beim Rendern jedes Pfads
+  // wiederverwendet, damit Pattern nicht pro Frame neu erzeugt werden.
+  const twistPatternCache = new Map();
+  function makeTwistPattern(color) {
+    const off = document.createElement("canvas");
+    off.width = 14; off.height = 14;
+    const c = off.getContext("2d");
+    c.fillStyle = "rgba(0,0,0,0)";
+    c.fillRect(0, 0, 14, 14);
+    c.strokeStyle = shade(color, 0.55);
+    c.globalAlpha = 0.55;
+    c.lineWidth = 1.1;
+    // Schräge Striche bei 32° für die typische Zwirn-Twist-Optik
+    c.translate(7, 7);
+    c.rotate((32 * Math.PI) / 180);
+    c.translate(-7, -7);
+    for (let i = -18; i <= 28; i += 5) {
+      c.beginPath();
+      c.moveTo(i, 0);
+      c.lineTo(i + 14, 14);
+      c.stroke();
+    }
+    return c.canvas;
+  }
+  function getTwistPattern(ctx, color) {
+    let pat = twistPatternCache.get(color);
+    if (!pat) {
+      pat = ctx.createPattern(makeTwistPattern(color), "repeat");
+      twistPatternCache.set(color, pat);
+    }
+    return pat;
+  }
+
   function drawPath(ctx, path, color, isLive) {
     if (path.stitches.length === 0) return;
     const T = SP.Const.STITCH_TYPE;
@@ -3395,36 +3428,58 @@ SP.Renderer = (() => {
     if (expanded.length === 0) return;
 
     const ePx = SP.Viewport.getEffectivePxPerMm();
-    const strokeMm = 0.054;
-    const lwPx = Math.max(0.21, strokeMm * ePx);
-    // Lücke = 10 % der Stichlänge (5 % an jedem Ende des Segments).
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lwPx;
-    ctx.lineCap = "butt";
-    ctx.lineJoin = "miter";
+    // Fadendicke ≈ 0.45 mm (typisches Polyester-40 wt), aber min. 1.5 px
+    // damit das Twist-Pattern auch bei weitem Zoom-out sichtbar bleibt.
+    const threadMm = 0.45;
+    const lwPx = Math.max(1.5, threadMm * ePx);
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.setLineDash([]);
 
-    ctx.beginPath();
-    for (let i = 0; i < expanded.length - 1; i++) {
-      const a = expanded[i];
-      const b = expanded[i + 1];
-      if (b.type === T.JUMP) continue;
-      const ap = SP.Viewport.mmToPx({ xMm: a.xMm, yMm: a.yMm });
-      const bp = SP.Viewport.mmToPx({ xMm: b.xMm, yMm: b.yMm });
-      const dx = bp.x - ap.x, dy = bp.y - ap.y;
-      const len = Math.hypot(dx, dy);
-      if (len < 1) continue;
-      // An Klick-Punkten (Ecken) und an Long-Stitch-Split-Punkten innerhalb
-      // einer Zickzack-Diagonale keine Lücke setzen — sonst stapeln sich
-      // zwei Lücken am gleichen Punkt und erzeugen eine sichtbare weisse
-      // Linie (besonders auf der Satin-Mittellinie).
-      const shrinkA = (a.clicked || a.split) ? 0 : len * 0.05;
-      const shrinkB = (b.clicked || b.split) ? 0 : len * 0.05;
-      const ux = dx / len, uy = dy / len;
-      ctx.moveTo(ap.x + ux * shrinkA, ap.y + uy * shrinkA);
-      ctx.lineTo(bp.x - ux * shrinkB, bp.y - uy * shrinkB);
+    // Konsekutive NORMAL-Stiche zu "runs" (durchgehende Fadenläufe) gruppieren.
+    // JUMPs trennen die runs; sie werden weiter unten optional als gestrichelt
+    // dargestellt.
+    const runs = [];
+    let current = null;
+    for (let i = 0; i < expanded.length; i++) {
+      const s = expanded[i];
+      const sp = SP.Viewport.mmToPx({ xMm: s.xMm, yMm: s.yMm });
+      if (s.type === T.JUMP) {
+        if (current && current.pts.length >= 2) runs.push(current);
+        current = null;
+      } else {
+        if (!current) current = { pts: [], minY: Infinity, maxY: -Infinity };
+        current.pts.push(sp);
+        if (sp.y < current.minY) current.minY = sp.y;
+        if (sp.y > current.maxY) current.maxY = sp.y;
+      }
     }
-    ctx.stroke();
+    if (current && current.pts.length >= 2) runs.push(current);
+
+    // Pro Run: Tube-Gradient (oben hell, unten dunkel) + Twist-Pattern overlay.
+    const twistPat = getTwistPattern(ctx, color);
+    for (const run of runs) {
+      const grad = ctx.createLinearGradient(
+        0, run.minY - lwPx / 2,
+        0, run.maxY + lwPx / 2
+      );
+      grad.addColorStop(0, shade(color, 0.35));
+      grad.addColorStop(0.5, color);
+      grad.addColorStop(1, shade(color, -0.4));
+      // Pfad einmal beschreiben — Form wird zweimal gezeichnet (Gradient + Twist)
+      ctx.beginPath();
+      ctx.moveTo(run.pts[0].x, run.pts[0].y);
+      for (let i = 1; i < run.pts.length; i++) {
+        ctx.lineTo(run.pts[i].x, run.pts[i].y);
+      }
+      ctx.lineWidth = lwPx;
+      ctx.strokeStyle = grad;
+      ctx.stroke();
+      // Twist-Pattern-Overlay (gleicher Pfad)
+      ctx.strokeStyle = twistPat;
+      ctx.stroke();
+    }
 
     if (showJumps) {
       ctx.strokeStyle = "#e08020";
