@@ -2766,7 +2766,7 @@ SP.PointerInput = (() => {
   let jumpMode = false;
   let activePointerId = null;
   let lastPointerType = "mouse"; // "mouse" | "pen" | "touch" — für Pinsel-Cursor-Sichtbarkeit
-  const listeners = { stitchAdded: [], pathStart: [], pathEnd: [], cursorMove: [], clickPreview: [], clickModeChange: [], erase: [], pathPicked: [], textPlace: [] };
+  const listeners = { stitchAdded: [], pathStart: [], pathEnd: [], cursorMove: [], clickPreview: [], clickModeChange: [], erase: [], eraseStart: [], pathPicked: [], textPlace: [] };
   // Hit-Test-Radius (mm) für "Klick auf bestehende Stichbahn → diese aktivieren".
   const PICK_PATH_RADIUS_MM = 2.5;
   let erasing = false;
@@ -2916,6 +2916,9 @@ SP.PointerInput = (() => {
       erasing = true;
       activePointerId = e.pointerId;
       try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      // eraseStart-Event signalisiert dem Handler, dass ein neuer Swipe
+      // beginnt → Interpolations-Anker (lastEraseMm) wird zurückgesetzt.
+      emit("eraseStart", eraseMm);
       emit("erase", eraseMm);
       e.preventDefault(); return;
     }
@@ -4909,8 +4912,36 @@ SP.UIShell = (() => {
         const banner = document.getElementById("clickBanner");
         if (banner) banner.classList.toggle("visible", !!active);
       });
+      // Radierer mit Interpolation: bei schnellen Wischen werden auch
+      // Stiche zwischen den abgetasteten Cursor-Positionen entfernt — sonst
+      // bleiben kleine Reste stehen, weil pointermove nur alle paar ms feuert.
+      let lastEraseMm = null;
+      SP.PointerInput.on("eraseStart", (mm) => { lastEraseMm = null; });
       SP.PointerInput.on("erase", (mm) => {
-        if (SP.StitchModel.eraseInRadius(mm, eraserRadiusMm)) {
+        let changed = false;
+        // Zwischenpositionen entlang der Strecke lastEraseMm → mm
+        if (lastEraseMm) {
+          const dx = mm.xMm - lastEraseMm.xMm;
+          const dy = mm.yMm - lastEraseMm.yMm;
+          const dist = Math.hypot(dx, dy);
+          // Schrittweite ≈ halber Radierer-Radius, damit die Kreise
+          // garantiert überlappen.
+          const step = Math.max(0.3, eraserRadiusMm * 0.5);
+          const steps = Math.floor(dist / step);
+          if (steps > 0) {
+            const ux = dx / dist, uy = dy / dist;
+            for (let i = 1; i <= steps; i++) {
+              const ix = lastEraseMm.xMm + ux * i * step;
+              const iy = lastEraseMm.yMm + uy * i * step;
+              if (SP.StitchModel.eraseInRadius({ xMm: ix, yMm: iy }, eraserRadiusMm)) {
+                changed = true;
+              }
+            }
+          }
+        }
+        if (SP.StitchModel.eraseInRadius(mm, eraserRadiusMm)) changed = true;
+        lastEraseMm = mm;
+        if (changed) {
           SP.Renderer.invalidate("stitches");
           updateStatus();
           SP.Persistence.autoSave();
