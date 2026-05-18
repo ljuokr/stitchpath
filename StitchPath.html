@@ -2258,17 +2258,19 @@ SP.PathOps = (() => {
           rows.push(offsetPolyline(stitches, off, axisOverride));
         }
         const out = [];
-        // Serpentine: gerade Reihen vorwärts, ungerade rückwärts. Übergang
-        // zwischen Reihen ist dann nur eine kurze senkrechte Verschiebung
-        // (= lw/(count-1)). Diese als JUMP markieren, damit sie unsichtbar
-        // bleibt und keinen sichtbaren "Quer-Stich" produziert.
+        // Serpentine: gerade Reihen vorwärts, ungerade rückwärts.
+        // JEDE Row (inkl. Row 0) startet mit einem JUMP-markierten Punkt
+        // an ihrer eigenen Anfangsposition — damit haben ALLE Rows exakt
+        // dieselbe Struktur im expanded-Array (kein Unterschied zwischen
+        // "erste Row ohne führendem JUMP" und "spätere Rows mit JUMP").
         for (let r = 0; r < rows.length; r++) {
           const row = rows[r];
           const ordered = (r % 2 === 0) ? row : row.slice().reverse();
           for (let k = 0; k < ordered.length; k++) {
             const s = ordered[k];
-            if (r > 0 && k === 0) {
-              // Übergang von der vorigen Reihe — unsichtbarer JUMP.
+            if (k === 0) {
+              // Jeder Row-Anfang ist ein JUMP-Punkt (unsichtbar, dient nur
+              // als Startposition für die folgenden NORMAL-Stiche).
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
             } else {
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.NORMAL });
