@@ -2287,19 +2287,22 @@ SP.PathOps = (() => {
         }
         const out = [];
         // Alle Reihen in derselben Richtung (vorwärts) — keine Serpentine.
-        // Zwischen den Reihen ein JUMP vom Ende der vorigen zur Start-
-        // Position der nächsten. toMachineRecords zerlegt grosse JUMP-Deltas
-        // automatisch in mehrere Records ≤ 12.1 mm, sodass in der DST keine
-        // einzelnen langen JUMP-Records entstehen.
+        // Pro Reihe: JUMP zum Reihenanfang, dann ein Anker-NORMAL an
+        // derselben Position, dann die NORMAL-Stiche an den weiteren Punkten.
+        // Der Anker-NORMAL sorgt dafür, dass die DST pro Reihe so viele
+        // NORMAL-Records enthält wie es Punkte in der Mittellinie gibt —
+        // die Stickmaschine sticht damit den ersten "Anker"-Stich an der
+        // Pointerdown-Position und zählt diese Position als Stich mit.
+        // toMachineRecords zerlegt grosse JUMP-Deltas (Reihenübergänge)
+        // automatisch in Records ≤ 12.1 mm.
         for (let r = 0; r < rows.length; r++) {
           const row = rows[r];
-          for (let k = 0; k < row.length; k++) {
-            const s = row[k];
-            if (k === 0) {
-              out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
-            } else {
-              out.push({ xMm: s.xMm, yMm: s.yMm, type: T.NORMAL });
-            }
+          if (row.length === 0) continue;
+          out.push({ xMm: row[0].xMm, yMm: row[0].yMm, type: T.JUMP });
+          // Anker-NORMAL an der Reihen-Startposition (Stich an Pointerdown).
+          out.push({ xMm: row[0].xMm, yMm: row[0].yMm, type: T.NORMAL });
+          for (let k = 1; k < row.length; k++) {
+            out.push({ xMm: row[k].xMm, yMm: row[k].yMm, type: T.NORMAL });
           }
         }
         return out;
