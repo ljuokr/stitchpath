@@ -1861,13 +1861,12 @@ SP.PathOps = (() => {
   // sind, ist die Richtung gesperrt — der Rest des Pfads kann beliebig
   // wachsen, ohne dass sich die parallelen Reihen verdrehen.
   const PARALLEL_REF_MM = 3.0;
-  // Cardinal-Snap-Toleranz: Achse rundet automatisch auf die nächste
-  // Kardinalrichtung (0°, 90°, 180°, -90°), wenn sie innerhalb dieses
-  // Winkel-Bereichs liegt. Verhindert dass kleines Handzittern oder
-  // ungenaue Anfangsrichtung sich über viele parallele Reihen zu
-  // sichtbarem X-Versatz aufsummiert. Ausserhalb dieser Zone wird die
-  // gemessene Richtung 1:1 genutzt (z. B. für bewusst diagonale Bahnen).
-  const PARALLEL_CARDINAL_TOL_DEG = 20;
+  // Cardinal-Snap der Parallel-Achse — IMMER. Die berechnete Achse
+  // wird auf die nächste Hauptrichtung (0°, 90°, 180°, -90°) gerundet,
+  // unabhängig von der genauen Strichrichtung. Konsequenz: Mehrfach-
+  // Reihen sind immer rein horizontal oder rein vertikal versetzt,
+  // niemals diagonal. Damit liegen alle Reihen-Anfänge und -Enden
+  // mathematisch exakt übereinander — kein "wenige mm länger" mehr.
   function computeParallelAxis(stitches) {
     if (!stitches || stitches.length < 2) return null;
     let dirX = 0, dirY = 0, acc = 0;
@@ -1890,20 +1889,18 @@ SP.PathOps = (() => {
     const aLen = Math.hypot(dirX, dirY);
     if (aLen < 1e-6) return null;
     const ax = dirX / aLen, ay = dirY / aLen;
-    // Cardinal-Snap: wenn innerhalb der Toleranz einer Hauptachse,
-    // dort einrasten. Sonst gemessene Achse beibehalten.
+    // Nächste Kardinalrichtung wählen (immer)
     const cardinals = [
       { x: 1, y: 0 },  { x: 0, y: 1 },
       { x: -1, y: 0 }, { x: 0, y: -1 },
     ];
-    const tolRad = (PARALLEL_CARDINAL_TOL_DEG * Math.PI) / 180;
-    const cosTol = Math.cos(tolRad);
+    let best = cardinals[0];
+    let bestDot = -Infinity;
     for (const c of cardinals) {
-      // Dot-Product = cos(Winkel zwischen Achse und Kardinalrichtung)
       const dot = ax * c.x + ay * c.y;
-      if (dot >= cosTol) return c;
+      if (dot > bestDot) { bestDot = dot; best = c; }
     }
-    return { x: ax, y: ay };
+    return best;
   }
 
   // Mehrfachstich-Offset: reine Translation entlang einer einmal berechneten
