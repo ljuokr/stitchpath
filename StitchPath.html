@@ -1861,24 +1861,15 @@ SP.PathOps = (() => {
   // sind, ist die Richtung gesperrt — der Rest des Pfads kann beliebig
   // wachsen, ohne dass sich die parallelen Reihen verdrehen.
   const PARALLEL_REF_MM = 1.0;
-  // Berechnet die Hauptachse (Einheitsvektor) eines Pfads. Bevorzugt wird
-  // die Gesamtsehne (erster Punkt → letzter Punkt) — das mittelt Handzittern
-  // am Pfadanfang weg, sodass mehrere parallel gezeichnete Linien auf dieselbe
-  // Achse abgebildet werden. Für sehr kurze Pfade oder Pfade, die zum Anfang
-  // zurückkehren (Schleifen), fällt die Methode auf die ersten PARALLEL_REF_MM
-  // Bogenlänge zurück.
+  const PARALLEL_SNAP_DEG = 5;
+  // Berechnet die Hauptachse (Einheitsvektor) eines Pfads aus den ersten
+  // PARALLEL_REF_MM Bogenlänge — locked also schon nach ~1 mm und bleibt
+  // dann stabil (kein "3D-Effekt"). Das Ergebnis wird anschliessend auf
+  // Vielfache von PARALLEL_SNAP_DEG° gerundet — kleines Handzittern unter
+  // ~2.5° ändert die Achse nicht, mehrere "horizontale" Linien snappen
+  // alle auf 0° → keine sichtbaren Mini-Versätze zwischen den Bahnen.
   function computeParallelAxis(stitches) {
     if (!stitches || stitches.length < 2) return null;
-    // 1) Versuch: Sehne (Start → Ende)
-    const first = stitches[0];
-    const last = stitches[stitches.length - 1];
-    const cx = last.xMm - first.xMm;
-    const cy = last.yMm - first.yMm;
-    const chordLen = Math.hypot(cx, cy);
-    if (chordLen >= PARALLEL_REF_MM) {
-      return { x: cx / chordLen, y: cy / chordLen };
-    }
-    // 2) Fallback (kurze oder geschlossene Pfade): erste PARALLEL_REF_MM
     let dirX = 0, dirY = 0, acc = 0;
     for (let i = 1; i < stitches.length; i++) {
       const a = stitches[i - 1], b = stitches[i];
@@ -1898,7 +1889,11 @@ SP.PathOps = (() => {
     }
     const aLen = Math.hypot(dirX, dirY);
     if (aLen < 1e-6) return null;
-    return { x: dirX / aLen, y: dirY / aLen };
+    // Winkel auf PARALLEL_SNAP_DEG Schritte runden
+    const rad = Math.atan2(dirY, dirX);
+    const snapRad = (PARALLEL_SNAP_DEG * Math.PI) / 180;
+    const snapped = Math.round(rad / snapRad) * snapRad;
+    return { x: Math.cos(snapped), y: Math.sin(snapped) };
   }
 
   function offsetPolyline(stitches, offsetMm, axisOverride) {
