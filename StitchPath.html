@@ -1861,13 +1861,13 @@ SP.PathOps = (() => {
   // sind, ist die Richtung gesperrt — der Rest des Pfads kann beliebig
   // wachsen, ohne dass sich die parallelen Reihen verdrehen.
   const PARALLEL_REF_MM = 3.0;
-  const PARALLEL_SNAP_DEG = 5;
-  // Berechnet die Hauptachse (Einheitsvektor) eines Pfads aus den ersten
-  // PARALLEL_REF_MM Bogenlänge — locked also schon nach ~1 mm und bleibt
-  // dann stabil (kein "3D-Effekt"). Das Ergebnis wird anschliessend auf
-  // Vielfache von PARALLEL_SNAP_DEG° gerundet — kleines Handzittern unter
-  // ~2.5° ändert die Achse nicht, mehrere "horizontale" Linien snappen
-  // alle auf 0° → keine sichtbaren Mini-Versätze zwischen den Bahnen.
+  // Cardinal-Snap-Toleranz: Achse rundet automatisch auf die nächste
+  // Kardinalrichtung (0°, 90°, 180°, -90°), wenn sie innerhalb dieses
+  // Winkel-Bereichs liegt. Verhindert dass kleines Handzittern oder
+  // ungenaue Anfangsrichtung sich über viele parallele Reihen zu
+  // sichtbarem X-Versatz aufsummiert. Ausserhalb dieser Zone wird die
+  // gemessene Richtung 1:1 genutzt (z. B. für bewusst diagonale Bahnen).
+  const PARALLEL_CARDINAL_TOL_DEG = 20;
   function computeParallelAxis(stitches) {
     if (!stitches || stitches.length < 2) return null;
     let dirX = 0, dirY = 0, acc = 0;
@@ -1889,11 +1889,21 @@ SP.PathOps = (() => {
     }
     const aLen = Math.hypot(dirX, dirY);
     if (aLen < 1e-6) return null;
-    // Winkel auf PARALLEL_SNAP_DEG Schritte runden
-    const rad = Math.atan2(dirY, dirX);
-    const snapRad = (PARALLEL_SNAP_DEG * Math.PI) / 180;
-    const snapped = Math.round(rad / snapRad) * snapRad;
-    return { x: Math.cos(snapped), y: Math.sin(snapped) };
+    const ax = dirX / aLen, ay = dirY / aLen;
+    // Cardinal-Snap: wenn innerhalb der Toleranz einer Hauptachse,
+    // dort einrasten. Sonst gemessene Achse beibehalten.
+    const cardinals = [
+      { x: 1, y: 0 },  { x: 0, y: 1 },
+      { x: -1, y: 0 }, { x: 0, y: -1 },
+    ];
+    const tolRad = (PARALLEL_CARDINAL_TOL_DEG * Math.PI) / 180;
+    const cosTol = Math.cos(tolRad);
+    for (const c of cardinals) {
+      // Dot-Product = cos(Winkel zwischen Achse und Kardinalrichtung)
+      const dot = ax * c.x + ay * c.y;
+      if (dot >= cosTol) return c;
+    }
+    return { x: ax, y: ay };
   }
 
   // Mehrfachstich-Offset: reine Translation entlang einer einmal berechneten
