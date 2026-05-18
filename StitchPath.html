@@ -1145,9 +1145,9 @@
       <div class="slider-row" id="distRow">
         <div class="header">
           <span>Stichlänge</span>
-          <span><span id="distLabel">0.4</span> mm</span>
+          <span><span id="distLabel">2.5</span> mm</span>
         </div>
-        <input type="range" id="distMm" min="0.4" max="7" step="0.1" value="0.4">
+        <input type="range" id="distMm" min="0.4" max="7" step="0.1" value="2.5">
       </div>
       <div class="slider-row" id="lwRow">
         <div class="header">
@@ -1284,7 +1284,7 @@ SP.Const = {
   EXP_DELTA_LIMIT: 127,
   STORAGE_KEY: "stitchpath:v1",
   DEFAULT_HOOP: { wMm: 100, hMm: 100 },
-  DEFAULT_DIST_MM: 0.4,
+  DEFAULT_DIST_MM: 2.5,
   // Stichlänge-Bereich. Geradstich/Mehrfach gehen nicht unter 0.4 mm (sonst
   // wird der Faden zu dicht / die Nadel überlastet). Zickzack/Satin dürfen
   // bis 0.1 mm runter, damit dichte Füllungen sauber decken. Maximum für
@@ -1292,8 +1292,9 @@ SP.Const = {
   MIN_DIST_MM_ABS: 0.1,
   MIN_DIST_BY_TYPE: { running: 0.4, triple: 0.4, zigzag: 0.1 },
   MAX_DIST_MM: 7.0,
-  // Default-Stichlänge je Stichtyp.
-  DEFAULT_DIST_BY_TYPE: { running: 0.4, triple: 0.4, zigzag: 0.2 },
+  // Default-Stichlänge je Stichtyp. Werte praxistauglich für mittlere
+  // Stickdichte gewählt (nicht das absolute Minimum).
+  DEFAULT_DIST_BY_TYPE: { running: 2.5, triple: 2.5, zigzag: 0.4 },
   STITCH_TYPE: { NORMAL: 0, JUMP: 1, COLOR_CHANGE: 2, TRIM: 3, END: 4 },
 };
 
