@@ -3055,35 +3055,29 @@ SP.PointerInput = (() => {
         pressArcPx += Math.hypot(sdx, sdy);
         if (pressArcPx > 6) pressMoved = true;
       }
-      if (pressMoved && lastSampleMm) {
-        // Wir folgen dem Pfad in mm-Bogenlänge: jedes pointermove-Segment
-        // (lastSampleMm → mm) wird einzeln betrachtet. Jedes Mal, wenn die
-        // kumulierte Bogenlänge minDistanceMm überschreitet, setzen wir genau
-        // an dieser Stelle einen Stich. So produzieren auch Hin-und-Her-
-        // Bewegungen, die kürzer als die Stichlänge sind, sauber Stiche
-        // entlang der Kritzel-Bahn.
-        const segDx = mm.xMm - lastSampleMm.xMm;
-        const segDy = mm.yMm - lastSampleMm.yMm;
-        const segLen = Math.hypot(segDx, segDy);
-        if (segLen > 0) {
-          const ux = segDx / segLen, uy = segDy / segLen;
-          let pos = 0;
-          // Solange wir innerhalb dieses Segments noch einen Stich erreichen,
-          // emittieren.
-          while (arcSinceEmitMm + (segLen - pos) >= minDistanceMm - 1e-9) {
-            const need = minDistanceMm - arcSinceEmitMm;
-            pos += need;
-            const sx = lastSampleMm.xMm + ux * pos;
-            const sy = lastSampleMm.yMm + uy * pos;
-            emit("stitchAdded", {
-              xMm: sx,
-              yMm: sy,
-              type: jumpMode ? T.JUMP : T.NORMAL,
-            });
-            lastAcceptedMm = { xMm: sx, yMm: sy };
-            arcSinceEmitMm = 0;
-          }
-          arcSinceEmitMm += (segLen - pos);
+      if (pressMoved && lastAcceptedMm) {
+        // Stichabstand wird über die GERADE LINIE vom letzten gesetzten Stich
+        // zum Cursor gemessen — nicht über die Bogenlänge. Hin-und-Her-
+        // Bewegung in einem Bereich kleiner als die Stichlänge erzeugt KEINEN
+        // Stich; erst wenn der Cursor mindestens minDistanceMm geradlinig
+        // vom letzten Stich entfernt ist, kommt der nächste — und zwar
+        // exakt am Punkt minDistanceMm vom letzten Stich in Richtung Cursor.
+        // So bleibt die eingestellte Stichlänge auch bei Kritzelbewegungen
+        // verbindlich.
+        let safety = 0;
+        while (safety++ < 1000) {
+          const ddx = mm.xMm - lastAcceptedMm.xMm;
+          const ddy = mm.yMm - lastAcceptedMm.yMm;
+          const dist = Math.hypot(ddx, ddy);
+          if (dist < minDistanceMm - 1e-9) break;
+          const ux = ddx / dist, uy = ddy / dist;
+          const sx = lastAcceptedMm.xMm + ux * minDistanceMm;
+          const sy = lastAcceptedMm.yMm + uy * minDistanceMm;
+          emit("stitchAdded", {
+            xMm: sx, yMm: sy,
+            type: jumpMode ? T.JUMP : T.NORMAL,
+          });
+          lastAcceptedMm = { xMm: sx, yMm: sy };
         }
       }
       lastSamplePx = p;
