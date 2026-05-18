@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>StitchPath – Faden-Render-Vergleich</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f4efe6;
+    --panel: #fbf8f2;
+    --ink: #2a2620;
+    --ink-soft: #6e655a;
+    --line: #d8d0c2;
+    --accent: #4f8a8b;
+    --accent-deep: #2c6566;
+    --fabric: #fbf8f2;
+    --thread: #2a4d7a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--ink);
+    padding: 16px;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .sub { color: var(--ink-soft); font-size: 13px; }
+  .controls {
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    margin-left: auto;
+    background: var(--panel);
+    padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line);
+  }
+  .controls label { font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
+  input[type=color] {
+    width: 28px; height: 28px; padding: 0;
+    border: 1px solid var(--line); border-radius: 6px;
+    cursor: pointer; background: white;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(60,40,20,0.06);
+    display: flex; flex-direction: column;
+  }
+  .card canvas { display: block; width: 100%; height: 180px; background: var(--fabric); }
+  .card .meta {
+    padding: 8px 12px; border-top: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .card .nm { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .card .nr { font-size: 11px; color: var(--ink-soft); }
+  .card .rate {
+    display: flex; gap: 4px;
+  }
+  .card .rate button {
+    width: 26px; height: 26px;
+    border: 1px solid var(--line); background: white;
+    border-radius: 50%; cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-soft); padding: 0;
+  }
+  .card .rate button.on { background: var(--accent); color: white; border-color: var(--accent); }
+  .card .rate button:hover { border-color: var(--accent); }
+  .card .desc {
+    padding: 0 12px 10px; font-size: 11px; color: var(--ink-soft); line-height: 1.4;
+  }
+  .top-actions { margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
+  .top-actions a { color: var(--accent-deep); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>StitchPath — Faden-Render-Vergleich</h1>
+    <div class="sub">20 verschiedene Darstellungen für Geradstich (oben) und Satin-Band (unten). Klick „★" um Favoriten zu markieren.</div>
+  </div>
+  <div class="controls">
+    <label>Faden
+      <input type="color" id="thread" value="#2a4d7a">
+    </label>
+    <label>Stoff
+      <input type="color" id="fabric" value="#fbf8f2">
+    </label>
+    <label>Stichbreite Satin
+      <input type="range" id="satinW" min="6" max="40" step="1" value="22" style="width:120px">
+      <span id="satinWVal">22</span>px
+    </label>
+  </div>
+</header>
+
+<div class="grid" id="grid"></div>
+
+<div class="top-actions">
+  Zum Hauptprogramm: <a href="./StitchPath.html">StitchPath</a>
+</div>
+
+<script>
+"use strict";
+
+// ===== Test-Pfade =====
+// Geradstich-Pfad: leichte S-Kurve, etwa 230 px breit
+function runPath(w, h) {
+  const pts = [];
+  const cx = w / 2, cy = h * 0.32;
+  const N = 60;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const x = 20 + (w - 40) * t;
+    const y = cy + Math.sin(t * Math.PI * 2) * 12;
+    pts.push({ x, y });
+  }
+  return pts;
+}
+// Satin-Pfad: horizontaler Balken, leicht gewellt
+function satinPath(w, h) {
+  const pts = [];
+  const cy = h * 0.68;
+  const N = 40;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const x = 20 + (w - 40) * t;
+    const y = cy + Math.sin(t * Math.PI * 1.6) * 6;
+    pts.push({ x, y });
+  }
+  return pts;
+}
+
+// ===== Hilfsfunktionen =====
+function darken(hex, k) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const f = 1 - Math.max(0, Math.min(1, k));
+  return "rgb(" + Math.round(parseInt(m[1],16)*f) + "," + Math.round(parseInt(m[2],16)*f) + "," + Math.round(parseInt(m[3],16)*f) + ")";
+}
+function lighten(hex, k) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const f = Math.max(0, Math.min(1, k));
+  const r = Math.round(parseInt(m[1],16) + (255-parseInt(m[1],16))*f);
+  const g = Math.round(parseInt(m[2],16) + (255-parseInt(m[2],16))*f);
+  const b = Math.round(parseInt(m[3],16) + (255-parseInt(m[3],16))*f);
+  return "rgb(" + r + "," + g + "," + b + ")";
+}
+function rgbToHsl(hex) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return [0,0,0.5];
+  const r = parseInt(m[1],16)/255, g = parseInt(m[2],16)/255, b = parseInt(m[3],16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  const l = (max+min)/2;
+  if (max === min) return [0,0,l];
+  const d = max-min;
+  const s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+  let h = 0;
+  if (max === r) h = ((g-b)/d + (g<b?6:0));
+  else if (max === g) h = ((b-r)/d + 2);
+  else h = ((r-g)/d + 4);
+  return [h*60, s, l];
+}
+
+function tracePath(ctx, pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+}
+function strokeAlong(ctx, pts, width, color) {
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = color;
+  tracePath(ctx, pts);
+  ctx.stroke();
+}
+function bbox(pts) {
+  let xmin=Infinity, xmax=-Infinity, ymin=Infinity, ymax=-Infinity;
+  for (const p of pts) {
+    if (p.x < xmin) xmin = p.x;
+    if (p.x > xmax) xmax = p.x;
+    if (p.y < ymin) ymin = p.y;
+    if (p.y > ymax) ymax = p.y;
+  }
+  return { xmin, ymin, xmax, ymax, w: xmax-xmin, h: ymax-ymin };
+}
+
+// ===== 20 Render-Stile =====
+// Jede Stil-Funktion bekommt (ctx, pts, w, color) und zeichnet ein Stück Faden.
+// "w" ist die Linienbreite in px.
+const STYLES = [
+  {
+    name: "Flach", desc: "Solide Volltonfarbe, keine Effekte.",
+    render(ctx, pts, w, color) { strokeAlong(ctx, pts, w, color); },
+  },
+  {
+    name: "Dunkler Rand", desc: "Dünner dunkler Konturrand für plastischere Trennung vom Stoff.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w + 1.5, darken(color, 0.45));
+      strokeAlong(ctx, pts, w, color);
+    },
+  },
+  {
+    name: "Quer-Verlauf", desc: "Querverlauf (oben hell, unten dunkel) – Tube-Effekt.",
+    render(ctx, pts, w, color) {
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.45));
+      grad.addColorStop(0.5, color);
+      grad.addColorStop(1, darken(color, 0.35));
+      strokeAlong(ctx, pts, w, grad);
+    },
+  },
+  {
+    name: "Quer-Verlauf + Glanz", desc: "Tube-Verlauf plus heller, dünner Glanzstreifen oben.",
+    render(ctx, pts, w, color) {
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.4));
+      grad.addColorStop(0.5, color);
+      grad.addColorStop(1, darken(color, 0.4));
+      strokeAlong(ctx, pts, w, grad);
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.18})), w*0.18, "rgba(255,255,255,0.55)");
+      ctx.restore();
+    },
+  },
+  {
+    name: "Doppellage", desc: "Dicke dunkle Unterlage + dünne helle Auflage – wie 3D-Drahtmodell.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w * 1.15, darken(color, 0.55));
+      strokeAlong(ctx, pts, w * 0.55, lighten(color, 0.3));
+    },
+  },
+  {
+    name: "Höhenrelief", desc: "Heller Streifen oben, dunkler Streifen unten – Bevel-Effekt.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w, color);
+      ctx.save();
+      ctx.globalCompositeOperation = "source-atop";
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.25})), w*0.35, lighten(color, 0.55));
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y + w*0.25})), w*0.3, "rgba(0,0,0,0.25)");
+      ctx.restore();
+    },
+  },
+  {
+    name: "Satin-Glanz", desc: "Klassischer Satin-Sheen: schmaler hellster Streifen leicht versetzt.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w, color);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.2})), w*0.12, lighten(color, 0.7));
+      ctx.restore();
+    },
+  },
+  {
+    name: "Matt (Velour)", desc: "Sanfter Halo ohne klare Glanzlinie – wirkt wie Wollfilz.",
+    render(ctx, pts, w, color) {
+      ctx.save();
+      ctx.shadowColor = lighten(color, 0.25);
+      ctx.shadowBlur = w * 0.4;
+      strokeAlong(ctx, pts, w, color);
+      ctx.restore();
+    },
+  },
+  {
+    name: "Seide", desc: "Starke schmale Spitzlicht-Linie, dunkle Schattenzone unten.",
+    render(ctx, pts, w, color) {
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.6));
+      grad.addColorStop(0.35, color);
+      grad.addColorStop(0.7, darken(color, 0.4));
+      grad.addColorStop(1, darken(color, 0.65));
+      strokeAlong(ctx, pts, w, grad);
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.32})), w*0.08, "rgba(255,255,255,0.85)");
+    },
+  },
+  {
+    name: "Wolle weich", desc: "Drei leicht versetzte, halbtransparente Striche – fuzzy.",
+    render(ctx, pts, w, color) {
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.shadowColor = color; ctx.shadowBlur = w * 0.3;
+      strokeAlong(ctx, pts.map(p => ({x:p.x - 0.6, y:p.y - 0.4})), w * 0.95, color);
+      strokeAlong(ctx, pts.map(p => ({x:p.x + 0.6, y:p.y + 0.4})), w * 0.95, color);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      strokeAlong(ctx, pts, w, color);
+    },
+  },
+  {
+    name: "Metallisch", desc: "Sehr kontrastreicher Verlauf – Glanz wie Metallic-Faden.",
+    render(ctx, pts, w, color) {
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.85));
+      grad.addColorStop(0.25, color);
+      grad.addColorStop(0.5, lighten(color, 0.4));
+      grad.addColorStop(0.75, darken(color, 0.5));
+      grad.addColorStop(1, darken(color, 0.8));
+      strokeAlong(ctx, pts, w, grad);
+    },
+  },
+  {
+    name: "Zwirn-Drehung", desc: "Schräge Hatch-Linien quer im Faden – simuliert gedrehte Fasern.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w, color);
+      // Schräge Schraffur via clipped Pattern
+      ctx.save();
+      tracePath(ctx, pts);
+      ctx.lineWidth = w; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(0,0,0,0)";
+      ctx.stroke(); // dient nur als Clip-Vorbereitung… Alternative:
+      ctx.restore();
+      // Über die ganze Linie schräge Striche legen
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = lighten(color, 0.35);
+      ctx.globalAlpha = 0.45;
+      for (let i = 0; i < pts.length - 1; i += 2) {
+        const a = pts[i], b = pts[i+1] || a;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const nx = -dy / L, ny = dx / L;
+        ctx.beginPath();
+        ctx.moveTo(a.x - nx*w*0.5 + dx*0.6, a.y - ny*w*0.5 + dy*0.6);
+        ctx.lineTo(a.x + nx*w*0.5 - dx*0.6, a.y + ny*w*0.5 - dy*0.6);
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+  },
+  {
+    name: "Faser-Rillen", desc: "Drei längs verlaufende Linien – sichtbare Plissee-Fasern.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w, color);
+      const offsets = [-w*0.28, 0, w*0.28];
+      for (const off of offsets) {
+        strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y + off})), 1, off < 0 ? lighten(color,0.45) : (off > 0 ? darken(color,0.3) : color));
+      }
+    },
+  },
+  {
+    name: "Stich-Schatten", desc: "Subtiler Schlagschatten unter dem Faden — schwebt über Stoff.",
+    render(ctx, pts, w, color) {
+      ctx.save();
+      ctx.shadowColor = "rgba(20,15,10,0.45)";
+      ctx.shadowBlur = w * 0.35; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = w*0.25;
+      strokeAlong(ctx, pts, w, color);
+      ctx.restore();
+    },
+  },
+  {
+    name: "Top-Highlight", desc: "Einfache helle Linie längs der Oberkante.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w, color);
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.28})), w*0.18, lighten(color, 0.5));
+    },
+  },
+  {
+    name: "Lichtkante", desc: "Ein scharfer Lichtstrich + ein scharfer Schattenstrich – sehr 3D.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w, color);
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.35})), 1.2, lighten(color, 0.8));
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y + w*0.35})), 1.2, darken(color, 0.6));
+    },
+  },
+  {
+    name: "Plastik-Look", desc: "Tube-Verlauf + breiter weicher Glanz + harte Glanzlinie.",
+    render(ctx, pts, w, color) {
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, darken(color, 0.15));
+      grad.addColorStop(0.4, lighten(color, 0.3));
+      grad.addColorStop(0.55, color);
+      grad.addColorStop(1, darken(color, 0.55));
+      strokeAlong(ctx, pts, w, grad);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.22})), w*0.1, "rgba(255,255,255,0.7)");
+      ctx.restore();
+    },
+  },
+  {
+    name: "Querstriche", desc: "Diskrete Querstriche entlang des Fadens — Stich-für-Stich-Eindruck.",
+    render(ctx, pts, w, color) {
+      strokeAlong(ctx, pts, w, color);
+      ctx.save();
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = "rgba(0,0,0,0.18)";
+      for (let i = 0; i < pts.length - 1; i += 3) {
+        const a = pts[i], b = pts[i+1] || a;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const nx = -dy / L, ny = dx / L;
+        ctx.beginPath();
+        ctx.moveTo(a.x - nx*w*0.45, a.y - ny*w*0.45);
+        ctx.lineTo(a.x + nx*w*0.45, a.y + ny*w*0.45);
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+  },
+  {
+    name: "Verlauf + Glanz + Schatten", desc: "Alles kombiniert – maximaler Realismus.",
+    render(ctx, pts, w, color) {
+      // Schlagschatten
+      ctx.save();
+      ctx.shadowColor = "rgba(20,15,10,0.4)";
+      ctx.shadowBlur = w * 0.4; ctx.shadowOffsetY = w * 0.3;
+      strokeAlong(ctx, pts, w, color);
+      ctx.restore();
+      // Tube-Verlauf
+      const b = bbox(pts);
+      const grad = ctx.createLinearGradient(b.xmin, b.ymin - w/2, b.xmin, b.ymax + w/2);
+      grad.addColorStop(0, lighten(color, 0.42));
+      grad.addColorStop(0.5, color);
+      grad.addColorStop(1, darken(color, 0.4));
+      strokeAlong(ctx, pts, w, grad);
+      // Glanz
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      strokeAlong(ctx, pts.map(p => ({x:p.x, y:p.y - w*0.2})), w*0.14, "rgba(255,255,255,0.7)");
+      ctx.restore();
+    },
+  },
+  {
+    name: "Konische Stiche", desc: "Faden wird leicht verjüngt dargestellt — wie ein realer Einstich.",
+    render(ctx, pts, w, color) {
+      // Zeichne Segment-für-Segment mit variierender Breite (Tapered)
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i+1];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const nx = -dy / L, ny = dx / L;
+        const wThick = w * 0.55, wThin = w * 0.15;
+        // Trapezoid: dick an a, dünn an b — alternierend
+        const wA = (i % 2 === 0) ? wThick : wThin;
+        const wB = (i % 2 === 0) ? wThin : wThick;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(a.x + nx*wA, a.y + ny*wA);
+        ctx.lineTo(b.x + nx*wB, b.y + ny*wB);
+        ctx.lineTo(b.x - nx*wB, b.y - ny*wB);
+        ctx.lineTo(a.x - nx*wA, a.y - ny*wA);
+        ctx.closePath();
+        ctx.fill();
+      }
+    },
+  },
+];
+
+// ===== Setup =====
+const grid = document.getElementById("grid");
+const threadInput = document.getElementById("thread");
+const fabricInput = document.getElementById("fabric");
+const satinW = document.getElementById("satinW");
+const satinWVal = document.getElementById("satinWVal");
+
+// Karten anlegen
+STYLES.forEach((style, idx) => {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <canvas data-idx="${idx}"></canvas>
+    <div class="desc">${style.desc}</div>
+    <div class="meta">
+      <div>
+        <div class="nm">${style.name}</div>
+        <div class="nr">Stil ${idx + 1} / ${STYLES.length}</div>
+      </div>
+      <div class="rate">
+        <button type="button" data-rate="${idx}" title="Favorit markieren">★</button>
+      </div>
+    </div>
+  `;
+  grid.appendChild(card);
+});
+
+// Favoriten in LocalStorage
+const FAV_KEY = "stitchpath:thread-style-favs";
+function loadFavs() {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch (_) { return []; }
+}
+function saveFavs(arr) { localStorage.setItem(FAV_KEY, JSON.stringify(arr)); }
+let favs = loadFavs();
+function applyFavUI() {
+  document.querySelectorAll(".rate button").forEach((b) => {
+    b.classList.toggle("on", favs.includes(parseInt(b.dataset.rate, 10)));
+  });
+}
+applyFavUI();
+document.querySelectorAll(".rate button").forEach((b) => {
+  b.addEventListener("click", () => {
+    const i = parseInt(b.dataset.rate, 10);
+    const pos = favs.indexOf(i);
+    if (pos >= 0) favs.splice(pos, 1);
+    else favs.push(i);
+    saveFavs(favs);
+    applyFavUI();
+  });
+});
+
+function drawAll() {
+  const thread = threadInput.value;
+  const fabric = fabricInput.value;
+  const sw = parseFloat(satinW.value) || 22;
+  satinWVal.textContent = String(Math.round(sw));
+  document.querySelectorAll("canvas[data-idx]").forEach((canvas) => {
+    const idx = parseInt(canvas.dataset.idx, 10);
+    const style = STYLES[idx];
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Hintergrund: Stoff
+    ctx.fillStyle = fabric;
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    // Stoff-Textur (leichte Rauschstruktur, dezent)
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    for (let i = 0; i < 40; i++) {
+      const x = Math.random() * rect.width;
+      const y = Math.random() * rect.height;
+      ctx.fillStyle = Math.random() < 0.5 ? "#000" : "#fff";
+      ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.restore();
+    // Beschriftung
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.font = "10px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText("Geradstich", 20, 16);
+    ctx.fillText("Satin", 20, rect.height * 0.52 + 4);
+    // Pfade
+    const runPts = runPath(rect.width, rect.height);
+    const satinPts = satinPath(rect.width, rect.height);
+    try {
+      style.render(ctx, runPts, 4, thread);
+      style.render(ctx, satinPts, sw, thread);
+    } catch (err) {
+      console.error("Style", style.name, err);
+    }
+  });
+}
+
+threadInput.addEventListener("input", drawAll);
+fabricInput.addEventListener("input", drawAll);
+satinW.addEventListener("input", drawAll);
+window.addEventListener("resize", drawAll);
+drawAll();
+</script>
+</body>
+</html>
