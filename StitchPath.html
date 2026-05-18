@@ -1265,7 +1265,7 @@
   <div class="info-foot">
     <strong>Funktioniert offline.</strong> StitchPath ist eine einzige HTML-Datei und läuft ohne Server vollständig im Browser.
     <a id="btnDownloadHtml" href="#" download="StitchPath.html">Datei herunterladen</a>
-    und lokal öffnen — auch unterwegs ohne Internet einsetzbar.
+    und lokal öffnen.
     <br><br>
     Frei nutzbar für private, schulische und nicht-kommerzielle Zwecke. Kommerzielle Nutzung nur mit schriftlicher Genehmigung des Autors. Experimentell — keine Gewähr für fehlerfreie Stickdateien.
   </div>
@@ -3431,57 +3431,62 @@ SP.Renderer = (() => {
     if (expanded.length === 0) return;
 
     const ePx = SP.Viewport.getEffectivePxPerMm();
-    // Fadendicke ≈ 0.45 mm (typisches Polyester-40 wt), aber min. 1.5 px
-    // damit das Twist-Pattern auch bei weitem Zoom-out sichtbar bleibt.
-    const threadMm = 0.45;
-    const lwPx = Math.max(1.5, threadMm * ePx);
+    // Fadendicke deutlich dünner: ~0.18 mm. Untergrenze 0.6 px.
+    // Das Twist-Pattern wird zusätzlich überblendet — sichtbar erst ab
+    // ca. 2.5 px Strichbreite (bei Zoom-in).
+    const threadMm = 0.18;
+    const lwPx = Math.max(0.6, threadMm * ePx);
+    const useTwist = lwPx >= 2.0;
+    const useGradient = lwPx >= 1.5;
 
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
     ctx.setLineDash([]);
+    ctx.lineWidth = lwPx;
 
-    // Konsekutive NORMAL-Stiche zu "runs" (durchgehende Fadenläufe) gruppieren.
-    // JUMPs trennen die runs; sie werden weiter unten optional als gestrichelt
-    // dargestellt.
-    const runs = [];
-    let current = null;
+    // Bbox aller NORMAL-Stiche für globalen Tube-Gradient.
+    let bboxMinY = Infinity, bboxMaxY = -Infinity;
     for (let i = 0; i < expanded.length; i++) {
-      const s = expanded[i];
-      const sp = SP.Viewport.mmToPx({ xMm: s.xMm, yMm: s.yMm });
-      if (s.type === T.JUMP) {
-        if (current && current.pts.length >= 2) runs.push(current);
-        current = null;
-      } else {
-        if (!current) current = { pts: [], minY: Infinity, maxY: -Infinity };
-        current.pts.push(sp);
-        if (sp.y < current.minY) current.minY = sp.y;
-        if (sp.y > current.maxY) current.maxY = sp.y;
-      }
+      if (expanded[i].type === T.JUMP) continue;
+      const p = SP.Viewport.mmToPx({ xMm: expanded[i].xMm, yMm: expanded[i].yMm });
+      if (p.y < bboxMinY) bboxMinY = p.y;
+      if (p.y > bboxMaxY) bboxMaxY = p.y;
     }
-    if (current && current.pts.length >= 2) runs.push(current);
-
-    // Pro Run: Tube-Gradient (oben hell, unten dunkel) + Twist-Pattern overlay.
-    const twistPat = getTwistPattern(ctx, color);
-    for (const run of runs) {
-      const grad = ctx.createLinearGradient(
-        0, run.minY - lwPx / 2,
-        0, run.maxY + lwPx / 2
-      );
-      grad.addColorStop(0, shade(color, 0.35));
+    let grad = color;
+    if (useGradient && isFinite(bboxMinY)) {
+      grad = ctx.createLinearGradient(0, bboxMinY - lwPx, 0, bboxMaxY + lwPx);
+      grad.addColorStop(0, shade(color, 0.3));
       grad.addColorStop(0.5, color);
-      grad.addColorStop(1, shade(color, -0.4));
-      // Pfad einmal beschreiben — Form wird zweimal gezeichnet (Gradient + Twist)
+      grad.addColorStop(1, shade(color, -0.35));
+    }
+
+    // Per-Segment-Rendering mit 5 %-Lücke an Stich-Grenzen (sichtbare
+    // Stich-Trennung). An Klick-Punkten und Split-Punkten keine Lücke.
+    function drawSegments(style) {
+      ctx.strokeStyle = style;
       ctx.beginPath();
-      ctx.moveTo(run.pts[0].x, run.pts[0].y);
-      for (let i = 1; i < run.pts.length; i++) {
-        ctx.lineTo(run.pts[i].x, run.pts[i].y);
+      for (let i = 0; i < expanded.length - 1; i++) {
+        const a = expanded[i];
+        const b = expanded[i + 1];
+        if (b.type === T.JUMP) continue;
+        const ap = SP.Viewport.mmToPx({ xMm: a.xMm, yMm: a.yMm });
+        const bp = SP.Viewport.mmToPx({ xMm: b.xMm, yMm: b.yMm });
+        const dx = bp.x - ap.x, dy = bp.y - ap.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) continue;
+        const shrinkA = (a.clicked || a.split) ? 0 : len * 0.05;
+        const shrinkB = (b.clicked || b.split) ? 0 : len * 0.05;
+        const ux = dx / len, uy = dy / len;
+        ctx.moveTo(ap.x + ux * shrinkA, ap.y + uy * shrinkA);
+        ctx.lineTo(bp.x - ux * shrinkB, bp.y - uy * shrinkB);
       }
-      ctx.lineWidth = lwPx;
-      ctx.strokeStyle = grad;
       ctx.stroke();
-      // Twist-Pattern-Overlay (gleicher Pfad)
-      ctx.strokeStyle = twistPat;
-      ctx.stroke();
+    }
+
+    drawSegments(grad);
+    if (useTwist) {
+      const twistPat = getTwistPattern(ctx, color);
+      drawSegments(twistPat);
     }
 
     if (showJumps) {
