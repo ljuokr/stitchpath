@@ -3439,24 +3439,42 @@ SP.Renderer = (() => {
       grad.addColorStop(1, shade(color, -0.35));
     }
 
-    // Direkt-Rendering ohne Shrinkage — der gezeichnete Pfad entspricht
-    // 1:1 den im DST exportierten Stichen.
+    // Renderer: jeder Run (= durchgehende Folge von Stichen zwischen JUMPs)
+    // wird als EINE kontinuierliche Polyline gezeichnet (1× moveTo + N× lineTo).
+    // Damit ist die Struktur für ALLE Rows identisch — Row 0 (ohne führenden
+    // JUMP) und Row 1+ (mit führendem JUMP-Punkt der als Startposition dient)
+    // bekommen dieselbe Polyline-Behandlung und sind garantiert gleich lang
+    // gerendert.
+    const runs = [];
+    {
+      let current = [];
+      for (let i = 0; i < expanded.length; i++) {
+        const s = expanded[i];
+        if (s.type === T.JUMP) {
+          // JUMP-Punkt schliesst alten Run ab und startet den neuen
+          // (an seiner eigenen Position, weil das die Anfangsposition der
+          // nächsten Row ist).
+          if (current.length >= 2) runs.push(current);
+          current = [s];
+        } else {
+          current.push(s);
+        }
+      }
+      if (current.length >= 2) runs.push(current);
+    }
+
     function drawSegments(style) {
       ctx.strokeStyle = style;
-      ctx.beginPath();
-      for (let i = 0; i < expanded.length - 1; i++) {
-        const a = expanded[i];
-        const b = expanded[i + 1];
-        if (b.type === T.JUMP) continue;
-        const ap = SP.Viewport.mmToPx({ xMm: a.xMm, yMm: a.yMm });
-        const bp = SP.Viewport.mmToPx({ xMm: b.xMm, yMm: b.yMm });
-        const dx = bp.x - ap.x, dy = bp.y - ap.y;
-        const len = Math.hypot(dx, dy);
-        if (len < 1) continue;
-        ctx.moveTo(ap.x, ap.y);
-        ctx.lineTo(bp.x, bp.y);
+      for (const run of runs) {
+        ctx.beginPath();
+        const p0 = SP.Viewport.mmToPx({ xMm: run[0].xMm, yMm: run[0].yMm });
+        ctx.moveTo(p0.x, p0.y);
+        for (let k = 1; k < run.length; k++) {
+          const p = SP.Viewport.mmToPx({ xMm: run[k].xMm, yMm: run[k].yMm });
+          ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
     }
 
     drawSegments(grad);
