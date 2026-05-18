@@ -2239,11 +2239,14 @@ SP.PathOps = (() => {
           rows.push(offsetPolyline(stitches, off, axisOverride));
         }
         const out = [];
+        // Alle Reihen in derselben Richtung — so liegen alle Anfänge an einem
+        // Ende übereinander und das Stickbild wirkt nicht "wechselnd versetzt".
+        // Der JUMP zwischen den Reihen ist dadurch etwas länger, bleibt aber
+        // optisch unsichtbar.
         for (let r = 0; r < rows.length; r++) {
           const row = rows[r];
-          const ordered = (r % 2 === 0) ? row : row.slice().reverse();
-          for (let k = 0; k < ordered.length; k++) {
-            const s = ordered[k];
+          for (let k = 0; k < row.length; k++) {
+            const s = row[k];
             if (r > 0 && k === 0) {
               // Übergang von der vorigen Reihe zu dieser Reihe: unsichtbarer JUMP.
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
