@@ -1907,11 +1907,11 @@ SP.PathOps = (() => {
   // perpendikulären Achse. Jede Reihe ist eine 1:1-Kopie der Mittellinie,
   // um einen festen Vektor verschoben — kein rotierender "Pinsel" beim
   // Zeichnen, alle Punkte stehen sofort fest.
-  // Resampelt eine Polyline auf gleichmässige Stich-Abstände entlang der
-  // Bogenlänge. Der erste und letzte Punkt bleiben exakt erhalten; die
-  // Zwischenpunkte liegen alle stepMm voneinander entfernt. Wenn die
-  // Gesamtlänge kein ganzzahliges Vielfaches von stepMm ist, wird der
-  // letzte Stich entsprechend etwas kürzer ausfallen.
+  // Resampelt eine Polyline so, dass ALLE Stiche EXAKT GLEICH LANG sind.
+  // Die Stichlänge ist die Zielgrösse (stepMm), die tatsächliche Stichlänge
+  // wird leicht justiert (typisch ±15 % vom Soll), damit der Pfad sauber
+  // mit dem letzten Punkt am Endpunkt aufhört — kein kürzerer "Rest-Stich"
+  // mehr.
   function resamplePolyline(stitches, stepMm) {
     if (!stitches || stitches.length < 2) {
       return stitches ? stitches.map((s) => ({ ...s })) : [];
@@ -1933,10 +1933,14 @@ SP.PathOps = (() => {
         { ...stitches[stitches.length - 1] },
       ];
     }
+    // Anzahl Stiche so wählen, dass die tatsächliche Stichlänge möglichst
+    // nahe an stepMm liegt. Mindestens 1 Stich.
+    const N = Math.max(1, Math.round(total / step));
+    const actualStep = total / N;
     const out = [{ ...stitches[0] }];
     let j = 1;
-    let s = step;
-    while (s < total - step * 0.5) {
+    for (let k = 1; k < N; k++) {
+      const s = k * actualStep;
       while (j < arc.length - 1 && arc[j] < s) j++;
       const segStart = arc[j - 1];
       const segEnd = arc[j];
@@ -1948,9 +1952,8 @@ SP.PathOps = (() => {
         yMm: a.yMm + (b.yMm - a.yMm) * t,
         type: a.type,
       });
-      s += step;
     }
-    // Letzten Punkt exakt setzen (preserviert die Endposition des Pfads).
+    // Letzter Punkt exakt am Pfadende.
     const last = stitches[stitches.length - 1];
     out.push({ xMm: last.xMm, yMm: last.yMm, type: last.type });
     return out;
