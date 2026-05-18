@@ -2288,27 +2288,23 @@ SP.PathOps = (() => {
       const stepMm = (typeof opts.stitchDistMm === "number" && opts.stitchDistMm > 0)
         ? opts.stitchDistMm : 1.0;
       if (stitchType === "running") {
-        // Pfad-Stitches sind durch Hand-Drag mit variabler Geschwindigkeit
-        // ungleichmässig gespaced. Vor dem Export auf exakte stepMm-Schritte
-        // resampeln — damit jeder gestickte Stich genau stepMm lang ist.
-        return resamplePolyline(stitches, stepMm);
+        // Stiche wie gezeichnet übernehmen — keine Manipulation.
+        return stitches.map((s) => ({ ...s }));
       }
       if (stitchType === "triple") {
-        // Mehrfachstich: Centerline auf exakt stepMm resampeln, dann jede
-        // parallele Reihe als Translate dieses resampleten Centerline
-        // erzeugen → alle Reihen haben mathematisch garantiert dieselbe
-        // Anzahl Stiche und identische Längen.
+        // Mehrfachstich: jede parallele Reihe ist ein perpendikulärer
+        // Translate der Original-Stiche. Damit haben alle Reihen exakt
+        // dieselbe Anzahl Stiche und identische Stichlängen — was beim
+        // Drag-Zeichnen bereits auf exakt stichLänge gesetzt wurde, bleibt
+        // erhalten.
         const count = multiCount;
-        if (count <= 1) return resamplePolyline(stitches, stepMm);
-        const resampled = resamplePolyline(stitches, stepMm);
-        // parallelAxis: vom Radierer eingefroren — damit die parallelen
-        // Reihen nach einem Erase nicht plötzlich neu ausgerichtet werden.
+        if (count <= 1) return stitches.map((s) => ({ ...s }));
         const axisOverride = opts.parallelAxis || null;
         const rows = [];
         for (let r = 0; r < count; r++) {
           const t = (count === 1) ? 0.5 : r / (count - 1); // 0..1
           const off = -lw / 2 + t * lw;
-          rows.push(offsetPolyline(resampled, off, axisOverride));
+          rows.push(offsetPolyline(stitches, off, axisOverride));
         }
         const out = [];
         // Serpentine: gerade Reihen vorwärts, ungerade rückwärts.
@@ -2988,36 +2984,51 @@ SP.PointerInput = (() => {
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
     const mm = SP.Viewport.pxToMm(p);
     if (!clickPathOpen) {
+      // Erster Klick einer neuen Linie: Startpunkt setzen. Dieser eine Stich
+      // markiert den Pfadanfang und hat noch keinen Vorgänger — die
+      // Stichlängen-Regel greift erst ab dem zweiten Klick.
       emit("pathStart", { mm });
+      emit("stitchAdded", {
+        xMm: mm.xMm, yMm: mm.yMm,
+        type: jumpMode ? T.JUMP : T.NORMAL,
+        clicked: true,
+      });
+      lastAcceptedMm = mm;
+      lastSampleMm = mm;
+      arcSinceEmitMm = 0;
     } else if (lastAcceptedMm) {
-      // Zwischen letztem Klick und neuem Klick Stiche im genauen
-      // Stichlängen-Abstand interpolieren — egal wie weit der Klick liegt,
-      // jeder Zwischenstich hat exakt minDistanceMm Länge.
+      // Folge-Klick: vom letzten gesetzten Stich in Richtung Klick exakt
+      // minDistanceMm-grosse Schritte ablegen. Die ausgewählte Stichlänge
+      // ist verbindlich — der letzte Stich landet nicht zwangsläufig genau
+      // auf dem Klick, sondern an der nächstgelegenen Stich-Schrittstelle.
+      // Math.round wählt die Anzahl Stiche, die der Klickdistanz am
+      // nächsten kommt; ist die Distanz kürzer als die halbe Stichlänge,
+      // wird der Klick ignoriert (kein Stich kürzer als die Sollänge).
       const ddx = mm.xMm - lastAcceptedMm.xMm;
       const ddy = mm.yMm - lastAcceptedMm.yMm;
       const dist = Math.hypot(ddx, ddy);
-      if (dist > minDistanceMm) {
-        const steps = Math.floor(dist / minDistanceMm);
+      const steps = Math.round(dist / minDistanceMm);
+      if (steps >= 1 && dist > 1e-6) {
         const ux = ddx / dist, uy = ddy / dist;
         const startX = lastAcceptedMm.xMm, startY = lastAcceptedMm.yMm;
+        let endX = startX, endY = startY;
         for (let i = 1; i <= steps; i++) {
           const t = i * minDistanceMm;
+          endX = startX + ux * t;
+          endY = startY + uy * t;
           emit("stitchAdded", {
-            xMm: startX + ux * t,
-            yMm: startY + uy * t,
+            xMm: endX, yMm: endY,
             type: jumpMode ? T.JUMP : T.NORMAL,
+            clicked: (i === steps),
           });
         }
+        lastAcceptedMm = { xMm: endX, yMm: endY };
+        lastSampleMm = lastAcceptedMm;
+        arcSinceEmitMm = 0;
       }
+      // else: Klick zu nah am letzten Stich — wird ignoriert, damit kein
+      // verkürzter Reststich entsteht.
     }
-    emit("stitchAdded", {
-      xMm: mm.xMm, yMm: mm.yMm,
-      type: jumpMode ? T.JUMP : T.NORMAL,
-      clicked: true,
-    });
-    lastAcceptedMm = mm;
-    lastSampleMm = mm;
-    arcSinceEmitMm = 0;
     e.preventDefault();
   }
   function onMove(e) {
