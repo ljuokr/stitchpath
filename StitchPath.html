@@ -1860,7 +1860,7 @@ SP.PathOps = (() => {
   // aus den ersten ~5 mm Pfadanfang abgeleitet. Sobald diese gezeichnet
   // sind, ist die Richtung gesperrt — der Rest des Pfads kann beliebig
   // wachsen, ohne dass sich die parallelen Reihen verdrehen.
-  const PARALLEL_REF_MM = 1.0;
+  const PARALLEL_REF_MM = 3.0;
   const PARALLEL_SNAP_DEG = 5;
   // Berechnet die Hauptachse (Einheitsvektor) eines Pfads aus den ersten
   // PARALLEL_REF_MM Bogenlänge — locked also schon nach ~1 mm und bleibt
