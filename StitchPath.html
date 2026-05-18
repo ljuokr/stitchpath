@@ -1535,11 +1535,7 @@ SP.StitchModel = (() => {
           const ddx = meta.tryContinueAt.xMm - lastStitch.xMm;
           const ddy = meta.tryContinueAt.yMm - lastStitch.yMm;
           const distMm = Math.hypot(ddx, ddy);
-          // Schwellwert grosszügig genug, um Trackpad-Kontaktverluste während
-          // eines durchgehenden Strichs aufzufangen (typisch 3-5 mm Reposition).
-          // Cap bei 15 mm, damit nicht versehentlich weit entfernte Pfade
-          // verbunden werden.
-          const threshold = Math.min(15.0, Math.max(5.0, dist * 3));
+          const threshold = Math.max(2.0, dist * 2);
           if (distMm <= threshold) {
             activeId = last.id;
             return last.id;
