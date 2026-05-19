@@ -2302,18 +2302,47 @@ SP.PathOps = (() => {
       }
       if (stitchType === "triple") {
         // Mehrfachstich: jede parallele Reihe ist ein perpendikulärer
-        // Translate der Original-Stiche. Damit haben alle Reihen exakt
-        // dieselbe Anzahl Stiche und identische Stichlängen — was beim
-        // Drag-Zeichnen bereits auf exakt stichLänge gesetzt wurde, bleibt
-        // erhalten.
+        // Translate der Original-Stiche.
         const count = multiCount;
         if (count <= 1) return stitches.map((s) => ({ ...s }));
         const axisOverride = opts.parallelAxis || null;
+        const axis = axisOverride || computeParallelAxis(stitches) || { x: 1, y: 0 };
+        // Mittellinie auf die cardinal-gesnappte Hauptachse projizieren,
+        // wenn die perpendikuläre Drift klein ist (typisch < halbe
+        // Stichlänge, < 1 mm). Damit haben alle Punkte exakt dieselbe
+        // Position entlang der Senkrechten zur Achse und die DST-Byte-
+        // Folge jeder Reihe ist identisch — keine Rendering-Quirks mehr
+        // in DST-Viewern (z. B. ezStitchDigitizing), die identische
+        // konsekutive Records anders darstellen würden.
+        // Bei grösserer Drift (z. B. Chevron, gewollte Kurve) wird NICHT
+        // projiziert — die gezeichnete Form bleibt erhalten.
+        let centerline = stitches;
+        if (stitches.length >= 2) {
+          const p0 = stitches[0];
+          let maxPerpDev = 0;
+          for (const s of stitches) {
+            const dx = s.xMm - p0.xMm, dy = s.yMm - p0.yMm;
+            const perpDev = Math.abs(dx * (-axis.y) + dy * axis.x);
+            if (perpDev > maxPerpDev) maxPerpDev = perpDev;
+          }
+          const driftThreshold = Math.min(Math.max(0.5, stepMm * 0.3), 1.5);
+          if (maxPerpDev <= driftThreshold) {
+            centerline = stitches.map((s) => {
+              const dx = s.xMm - p0.xMm, dy = s.yMm - p0.yMm;
+              const t = dx * axis.x + dy * axis.y;
+              return {
+                xMm: p0.xMm + axis.x * t,
+                yMm: p0.yMm + axis.y * t,
+                type: s.type,
+              };
+            });
+          }
+        }
         const rows = [];
         for (let r = 0; r < count; r++) {
           const t = (count === 1) ? 0.5 : r / (count - 1); // 0..1
           const off = -lw / 2 + t * lw;
-          rows.push(offsetPolyline(stitches, off, axisOverride));
+          rows.push(offsetPolyline(centerline, off, axis));
         }
         const out = [];
         // Serpentine: gerade Reihen vorwärts, ungerade rückwärts. Der
