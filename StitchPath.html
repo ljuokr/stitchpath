@@ -16,7 +16,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>StitchPath v20260519c</title>
+<title>StitchPath v20260519d</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <style>
   :root {
@@ -2389,16 +2389,20 @@ SP.PathOps = (() => {
           const last = flat[flat.length - 1];
           flat.push({ xMm: last.xMm, yMm: last.yMm, type: T.COLOR_CHANGE });
         }
-        // InkStitch-Konvention: jeder Pfad wird als Stich-Folge ausgegeben.
+        // DST-Erzeugung:
         //   - 1 JUMP zum ersten Mittellinien-Punkt (Nadel positionieren, kein Stich)
-        //   - (N-1) NORMAL-Records an den weiteren Punkten (jeder erzeugt
-        //     einen Stich vom vorigen zum aktuellen Punkt)
-        // Damit enthält die DST EXAKT die Stiche, die in der Mittellinie
-        // stehen — keine Zusatzstiche, keine künstlichen Verlängerungen.
-        // Optionale Tie-In/Tie-Off-Verriegelungsstiche werden NUR bei
-        // Text-Pfaden (Hershey-Strokes) eingefügt, weil dort der Faden
-        // sonst lose ist — analog zu InkStitch's "Lock Stitches" für
-        // einzelne kurze Strokes.
+        //   - NORMAL-Records an den weiteren Punkten (jeder erzeugt einen
+        //     Stich vom vorigen zum aktuellen Punkt)
+        // Mehrfachstich-Spezialfall: am Ende jeder Reihe wird zusätzlich ein
+        // NORMAL-Stich eine Stichlänge in Zeichenrichtung angehängt. Damit
+        // gibt es pro Mittellinien-Punkt einen sichtbaren NORMAL-Record —
+        // diese Lösung hatte beim User funktioniert. Greift NUR auf der
+        // DST-Übersetzung, die Canvas-Zeichnung bleibt unverändert.
+        // Text-Pfade bekommen zusätzlich Tie-In/Tie-Off-Verriegelungs-
+        // stiche an Stroke-Anfang und -Ende.
+        const stitchType = p.stitchType || "running";
+        const stepMm = (typeof p.stitchDistMm === "number") ? p.stitchDistMm : fallbackDist;
+        const isMehrfach = (stitchType === "triple");
         const isTextPath = !!p.isText;
         const TIE_MM = 1.2;
         const first = expanded[0];
@@ -2420,10 +2424,28 @@ SP.PathOps = (() => {
         }
         for (let i = 1; i < expanded.length; i++) {
           const s = expanded[i];
-          flat.push({
-            xMm: s.xMm, yMm: s.yMm,
-            type: s.type === T.JUMP ? T.JUMP : T.NORMAL,
-          });
+          const sType = s.type === T.JUMP ? T.JUMP : T.NORMAL;
+          flat.push({ xMm: s.xMm, yMm: s.yMm, type: sType });
+          // Bei Mehrfachstich: am Ende jeder Reihe (letztes NORMAL bevor
+          // wieder ein JUMP kommt) noch einen Zusatzstich eine Stichlänge
+          // in Zeichenrichtung anhängen.
+          if (isMehrfach && sType === T.NORMAL) {
+            const isLastInRow = (i === expanded.length - 1) || (expanded[i + 1].type === T.JUMP);
+            if (isLastInRow) {
+              const prev = expanded[i - 1];
+              let dx = s.xMm - prev.xMm;
+              let dy = s.yMm - prev.yMm;
+              const d = Math.hypot(dx, dy);
+              if (d > 1e-6) {
+                dx /= d; dy /= d;
+                flat.push({
+                  xMm: s.xMm + dx * stepMm,
+                  yMm: s.yMm + dy * stepMm,
+                  type: T.NORMAL,
+                });
+              }
+            }
+          }
         }
         if (isTextPath && expanded.length >= 2) {
           const lastS = expanded[expanded.length - 1];
