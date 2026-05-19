@@ -1523,7 +1523,6 @@ SP.StitchModel = (() => {
         multiCount: mc,
         stitchDistMm: dist,
         stitches: [],
-        isText: !!meta.isText,
       });
       activeId = id;
       undoStack.push({ op: "newPath", id });
@@ -2379,23 +2378,20 @@ SP.PathOps = (() => {
         }
         const stitchType = p.stitchType || "running";
         const stepMm = (typeof p.stitchDistMm === "number") ? p.stitchDistMm : fallbackDist;
-        // Zusatzstich-Mechanik gilt für Mehrfachstich-Reihen UND für
-        // Text-Pfade (Hershey-Strokes). Beide haben das gleiche Off-by-One-
-        // Problem: das erste Mittellinien-Element wird in der DST als JUMP
-        // codiert, wodurch pro Reihe / Stroke ein NORMAL-Stich fehlt.
-        const needsExtraStitch = (stitchType === "triple") || !!p.isText;
+        const isMehrfach = (stitchType === "triple");
         const first = expanded[0];
         flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.JUMP });
         for (let i = 1; i < expanded.length; i++) {
           const s = expanded[i];
           const sType = s.type === T.JUMP ? T.JUMP : T.NORMAL;
           flat.push({ xMm: s.xMm, yMm: s.yMm, type: sType });
-          // Am Ende jeder Reihe / jedes Strokes (= letztes NORMAL vor dem
-          // nächsten JUMP bzw. vor dem Pfad-Ende) noch einen Zusatzstich
-          // eine Stichlänge in Zeichenrichtung anhängen. Diese Änderung
-          // gilt NUR für die DST-Übersetzung; die Zeichnung auf dem Canvas
-          // bleibt davon unberührt.
-          if (needsExtraStitch && sType === T.NORMAL) {
+          // Bei Mehrfachstich: am Ende jeder Reihe (letztes NORMAL bevor
+          // wieder ein JUMP kommt) noch einen Zusatzstich eine Stichlänge
+          // in Zeichenrichtung anhängen — damit die DST pro Mittellinien-
+          // Punkt einen sichtbaren NORMAL-Record enthält. Diese Änderung
+          // gilt NUR für die DST-Übersetzung; die Zeichnung auf dem
+          // Canvas bleibt davon unberührt.
+          if (isMehrfach && sType === T.NORMAL) {
             const isLastInRow = (i === expanded.length - 1) || (expanded[i + 1].type === T.JUMP);
             if (isLastInRow) {
               const prev = expanded[i - 1];
@@ -5100,7 +5096,6 @@ SP.UIShell = (() => {
             stitchType: pathStitchType,
             lineWidthMm: (pathStitchType === "zigzag") ? opts.lwMm : undefined,
             stitchDistMm: (pathStitchType === "zigzag") ? opts.distMm : undefined,
-            isText: true,
           });
           for (const pt of stroke) {
             SP.StitchModel.appendStitch({
