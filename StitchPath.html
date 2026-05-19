@@ -1523,6 +1523,7 @@ SP.StitchModel = (() => {
         multiCount: mc,
         stitchDistMm: dist,
         stitches: [],
+        isText: !!meta.isText,
       });
       activeId = id;
       undoStack.push({ op: "newPath", id });
@@ -2332,9 +2333,12 @@ SP.PathOps = (() => {
         // sehr kurzer Stichlänge mit vielen dicht beieinander liegenden
         // Punkten wird Handzittern zuverlässig herausgefiltert.
         // smoothFrozen: wird vom Radierer gesetzt, damit nach dem Erase
-        // die bereits eingefrorene Mittellinie nicht erneut umgeformt
-        // wird. Glättung greift NUR bei Satin/Zickzack.
-        const smoothed = opts.smoothFrozen
+        // die bereits eingefrorene Mittellinie nicht erneut umgeformt wird.
+        // isText: Hershey-Glyphen haben präzise vorgegebene Eckpunkte und
+        // dürfen NICHT geglättet werden, sonst rundet der Filter die
+        // Buchstabenformen aus.
+        const skipSmoothing = opts.smoothFrozen || opts.isText;
+        const smoothed = skipSmoothing
           ? stitches
           : smoothZigzagCenterline(stitches, lw);
         return makeZigzag(smoothed, stepMm, lw / 2);
@@ -2370,6 +2374,7 @@ SP.PathOps = (() => {
           stitchDistMm: (typeof p.stitchDistMm === "number") ? p.stitchDistMm : fallbackDist,
           smoothFrozen: !!p.smoothFrozen,
           parallelAxis: p.parallelAxis || null,
+          isText: !!p.isText,
         });
         if (!expanded.length) continue;
         if (lastColor !== null && p.colorIndex !== lastColor) {
@@ -3507,6 +3512,7 @@ SP.Renderer = (() => {
       stitchType, lineWidthMm: lwMm, multiCount: mc, stitchDistMm: dist,
       smoothFrozen: !!path.smoothFrozen,
       parallelAxis: path.parallelAxis || null,
+      isText: !!path.isText,
     });
     if (expanded.length === 0) return;
 
@@ -5096,6 +5102,7 @@ SP.UIShell = (() => {
             stitchType: pathStitchType,
             lineWidthMm: (pathStitchType === "zigzag") ? opts.lwMm : undefined,
             stitchDistMm: (pathStitchType === "zigzag") ? opts.distMm : undefined,
+            isText: true,
           });
           for (const pt of stroke) {
             SP.StitchModel.appendStitch({
