@@ -2384,18 +2384,37 @@ SP.PathOps = (() => {
         const stitchType = p.stitchType || "running";
         const stepMm = (typeof p.stitchDistMm === "number") ? p.stitchDistMm : fallbackDist;
         const isMehrfach = (stitchType === "triple");
+        const isTextPath = !!p.isText;
+        const TIE_MM = 1.2; // typische Verriegelungs-Stich-Länge (1–1.5 mm)
         const first = expanded[0];
         flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.JUMP });
+        // Tie-In nur bei Text-Pfaden (Hershey-Strokes): zwei kurze
+        // Verriegelungsstiche am Stroke-Anfang in Richtung des nächsten
+        // Stichs, damit der Faden gesichert ist und die DST pro Stroke
+        // die zusätzlichen Stiche enthält, die der Anwender erwartet.
+        // Bei sehr kleinen Strokes (i-Tüpfel) wird der Tie auf die
+        // Segment-Länge begrenzt, damit der Anker im Buchstaben bleibt.
+        if (isTextPath && expanded.length >= 2) {
+          const next = expanded[1];
+          const dx = next.xMm - first.xMm, dy = next.yMm - first.yMm;
+          const d = Math.hypot(dx, dy);
+          if (d > 0.1) {
+            const ux = dx / d, uy = dy / d;
+            const tieLen = Math.min(TIE_MM, d * 1.2);
+            flat.push({
+              xMm: first.xMm + ux * tieLen,
+              yMm: first.yMm + uy * tieLen,
+              type: T.NORMAL,
+            });
+            flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.NORMAL });
+          }
+        }
         for (let i = 1; i < expanded.length; i++) {
           const s = expanded[i];
           const sType = s.type === T.JUMP ? T.JUMP : T.NORMAL;
           flat.push({ xMm: s.xMm, yMm: s.yMm, type: sType });
-          // Bei Mehrfachstich: am Ende jeder Reihe (letztes NORMAL bevor
-          // wieder ein JUMP kommt) noch einen Zusatzstich eine Stichlänge
-          // in Zeichenrichtung anhängen — damit die DST pro Mittellinien-
-          // Punkt einen sichtbaren NORMAL-Record enthält. Diese Änderung
-          // gilt NUR für die DST-Übersetzung; die Zeichnung auf dem
-          // Canvas bleibt davon unberührt.
+          // Bei Mehrfachstich: am Ende jeder Reihe einen Zusatzstich
+          // eine Stichlänge in Zeichenrichtung anhängen.
           if (isMehrfach && sType === T.NORMAL) {
             const isLastInRow = (i === expanded.length - 1) || (expanded[i + 1].type === T.JUMP);
             if (isLastInRow) {
@@ -2412,6 +2431,24 @@ SP.PathOps = (() => {
                 });
               }
             }
+          }
+        }
+        // Tie-Off nur bei Text-Pfaden: zwei kurze Verriegelungsstiche am
+        // Stroke-Ende rückwärts in Richtung des vorletzten Stichs.
+        if (isTextPath && expanded.length >= 2) {
+          const lastS = expanded[expanded.length - 1];
+          const prev = expanded[expanded.length - 2];
+          const dx = prev.xMm - lastS.xMm, dy = prev.yMm - lastS.yMm;
+          const d = Math.hypot(dx, dy);
+          if (d > 0.1) {
+            const ux = dx / d, uy = dy / d;
+            const tieLen = Math.min(TIE_MM, d * 1.2);
+            flat.push({
+              xMm: lastS.xMm + ux * tieLen,
+              yMm: lastS.yMm + uy * tieLen,
+              type: T.NORMAL,
+            });
+            flat.push({ xMm: lastS.xMm, yMm: lastS.yMm, type: T.NORMAL });
           }
         }
         lastColor = p.colorIndex;
