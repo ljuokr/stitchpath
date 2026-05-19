@@ -2302,58 +2302,28 @@ SP.PathOps = (() => {
       }
       if (stitchType === "triple") {
         // Mehrfachstich: jede parallele Reihe ist ein perpendikulärer
-        // Translate der Original-Stiche.
+        // Translate der Original-Stiche. ALLE Reihen werden in derselben
+        // Richtung emittiert (keine Serpentine) — damit haben alle Reihen
+        // IDENTISCHE Byte-Folgen in der DST und werden von jedem Viewer
+        // exakt gleich gerendert (egal welche Quirks der Viewer hat mit
+        // Reverse-Direction-Stichen oder identischen Records).
+        // Die JUMPs zwischen Reihen sind dafür länger (vom Reihen-Ende
+        // zum Anfang der nächsten Reihe), werden aber automatisch in
+        // mehrere Records ≤ 12 mm zerlegt.
         const count = multiCount;
         if (count <= 1) return stitches.map((s) => ({ ...s }));
         const axisOverride = opts.parallelAxis || null;
-        const axis = axisOverride || computeParallelAxis(stitches) || { x: 1, y: 0 };
-        // Mittellinie auf die cardinal-gesnappte Hauptachse projizieren,
-        // wenn die perpendikuläre Drift klein ist (typisch < halbe
-        // Stichlänge, < 1 mm). Damit haben alle Punkte exakt dieselbe
-        // Position entlang der Senkrechten zur Achse und die DST-Byte-
-        // Folge jeder Reihe ist identisch — keine Rendering-Quirks mehr
-        // in DST-Viewern (z. B. ezStitchDigitizing), die identische
-        // konsekutive Records anders darstellen würden.
-        // Bei grösserer Drift (z. B. Chevron, gewollte Kurve) wird NICHT
-        // projiziert — die gezeichnete Form bleibt erhalten.
-        let centerline = stitches;
-        if (stitches.length >= 2) {
-          const p0 = stitches[0];
-          let maxPerpDev = 0;
-          for (const s of stitches) {
-            const dx = s.xMm - p0.xMm, dy = s.yMm - p0.yMm;
-            const perpDev = Math.abs(dx * (-axis.y) + dy * axis.x);
-            if (perpDev > maxPerpDev) maxPerpDev = perpDev;
-          }
-          const driftThreshold = Math.min(Math.max(0.5, stepMm * 0.3), 1.5);
-          if (maxPerpDev <= driftThreshold) {
-            centerline = stitches.map((s) => {
-              const dx = s.xMm - p0.xMm, dy = s.yMm - p0.yMm;
-              const t = dx * axis.x + dy * axis.y;
-              return {
-                xMm: p0.xMm + axis.x * t,
-                yMm: p0.yMm + axis.y * t,
-                type: s.type,
-              };
-            });
-          }
-        }
         const rows = [];
         for (let r = 0; r < count; r++) {
           const t = (count === 1) ? 0.5 : r / (count - 1); // 0..1
           const off = -lw / 2 + t * lw;
-          rows.push(offsetPolyline(centerline, off, axis));
+          rows.push(offsetPolyline(stitches, off, axisOverride));
         }
         const out = [];
-        // Serpentine: gerade Reihen vorwärts, ungerade rückwärts. Der
-        // Übergang zwischen zwei Reihen ist dann nur ein kurzer
-        // perpendikulärer Hop (lw/(count-1) mm) statt eines langen JUMPs
-        // über die ganze Pfadlänge.
         for (let r = 0; r < rows.length; r++) {
           const row = rows[r];
-          const ordered = (r % 2 === 0) ? row : row.slice().reverse();
-          for (let k = 0; k < ordered.length; k++) {
-            const s = ordered[k];
+          for (let k = 0; k < row.length; k++) {
+            const s = row[k];
             if (k === 0) {
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
             } else {
