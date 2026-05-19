@@ -2307,15 +2307,15 @@ SP.PathOps = (() => {
           rows.push(offsetPolyline(stitches, off, axisOverride));
         }
         const out = [];
-        // Alle Reihen in derselben Richtung (vorwärts) — keine Serpentine.
-        // Zwischen den Reihen ein JUMP vom Ende der vorigen zur Start-
-        // Position der nächsten. toMachineRecords zerlegt grosse JUMP-Deltas
-        // automatisch in mehrere Records ≤ 12.1 mm, sodass in der DST keine
-        // einzelnen langen JUMP-Records entstehen.
+        // Serpentine: gerade Reihen vorwärts, ungerade rückwärts. Der
+        // Übergang zwischen zwei Reihen ist dann nur ein kurzer
+        // perpendikulärer Hop (lw/(count-1) mm) statt eines langen JUMPs
+        // über die ganze Pfadlänge.
         for (let r = 0; r < rows.length; r++) {
           const row = rows[r];
-          for (let k = 0; k < row.length; k++) {
-            const s = row[k];
+          const ordered = (r % 2 === 0) ? row : row.slice().reverse();
+          for (let k = 0; k < ordered.length; k++) {
+            const s = ordered[k];
             if (k === 0) {
               out.push({ xMm: s.xMm, yMm: s.yMm, type: T.JUMP });
             } else {
