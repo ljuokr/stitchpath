@@ -2381,19 +2381,20 @@ SP.PathOps = (() => {
           const last = flat[flat.length - 1];
           flat.push({ xMm: last.xMm, yMm: last.yMm, type: T.COLOR_CHANGE });
         }
-        const stitchType = p.stitchType || "running";
-        const stepMm = (typeof p.stitchDistMm === "number") ? p.stitchDistMm : fallbackDist;
-        const isMehrfach = (stitchType === "triple");
+        // InkStitch-Konvention: jeder Pfad wird als Stich-Folge ausgegeben.
+        //   - 1 JUMP zum ersten Mittellinien-Punkt (Nadel positionieren, kein Stich)
+        //   - (N-1) NORMAL-Records an den weiteren Punkten (jeder erzeugt
+        //     einen Stich vom vorigen zum aktuellen Punkt)
+        // Damit enthält die DST EXAKT die Stiche, die in der Mittellinie
+        // stehen — keine Zusatzstiche, keine künstlichen Verlängerungen.
+        // Optionale Tie-In/Tie-Off-Verriegelungsstiche werden NUR bei
+        // Text-Pfaden (Hershey-Strokes) eingefügt, weil dort der Faden
+        // sonst lose ist — analog zu InkStitch's "Lock Stitches" für
+        // einzelne kurze Strokes.
         const isTextPath = !!p.isText;
-        const TIE_MM = 1.2; // typische Verriegelungs-Stich-Länge (1–1.5 mm)
+        const TIE_MM = 1.2;
         const first = expanded[0];
         flat.push({ xMm: first.xMm, yMm: first.yMm, type: T.JUMP });
-        // Tie-In nur bei Text-Pfaden (Hershey-Strokes): zwei kurze
-        // Verriegelungsstiche am Stroke-Anfang in Richtung des nächsten
-        // Stichs, damit der Faden gesichert ist und die DST pro Stroke
-        // die zusätzlichen Stiche enthält, die der Anwender erwartet.
-        // Bei sehr kleinen Strokes (i-Tüpfel) wird der Tie auf die
-        // Segment-Länge begrenzt, damit der Anker im Buchstaben bleibt.
         if (isTextPath && expanded.length >= 2) {
           const next = expanded[1];
           const dx = next.xMm - first.xMm, dy = next.yMm - first.yMm;
@@ -2411,30 +2412,11 @@ SP.PathOps = (() => {
         }
         for (let i = 1; i < expanded.length; i++) {
           const s = expanded[i];
-          const sType = s.type === T.JUMP ? T.JUMP : T.NORMAL;
-          flat.push({ xMm: s.xMm, yMm: s.yMm, type: sType });
-          // Bei Mehrfachstich: am Ende jeder Reihe einen Zusatzstich
-          // eine Stichlänge in Zeichenrichtung anhängen.
-          if (isMehrfach && sType === T.NORMAL) {
-            const isLastInRow = (i === expanded.length - 1) || (expanded[i + 1].type === T.JUMP);
-            if (isLastInRow) {
-              const prev = expanded[i - 1];
-              let dx = s.xMm - prev.xMm;
-              let dy = s.yMm - prev.yMm;
-              const d = Math.hypot(dx, dy);
-              if (d > 1e-6) {
-                dx /= d; dy /= d;
-                flat.push({
-                  xMm: s.xMm + dx * stepMm,
-                  yMm: s.yMm + dy * stepMm,
-                  type: T.NORMAL,
-                });
-              }
-            }
-          }
+          flat.push({
+            xMm: s.xMm, yMm: s.yMm,
+            type: s.type === T.JUMP ? T.JUMP : T.NORMAL,
+          });
         }
-        // Tie-Off nur bei Text-Pfaden: zwei kurze Verriegelungsstiche am
-        // Stroke-Ende rückwärts in Richtung des vorletzten Stichs.
         if (isTextPath && expanded.length >= 2) {
           const lastS = expanded[expanded.length - 1];
           const prev = expanded[expanded.length - 2];
