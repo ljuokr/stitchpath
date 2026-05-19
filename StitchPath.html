@@ -1959,55 +1959,26 @@ SP.PathOps = (() => {
     return out;
   }
 
-  // Miter-Bisector-Offset (analog Linea's offsetPolyline). An jedem
-  // Punkt wird die Bisektor-Normale berechnet, sodass die perpendikuläre
-  // Distanz zur Mittellinie an Ecken erhalten bleibt. Extreme Miter werden
-  // auf max 1.5× des nominalen Offsets gekappt. Bei perfekt geraden
-  // Mittellinien ergibt der Algorithmus dasselbe wie eine reine Translation.
+  // Parallel-Offset für Mehrfachstich: REINE TRANSLATION aller Punkte um
+  // denselben perpendikulären Vektor (zur cardinal-gesnappten Hauptachse).
+  // WICHTIG: kein Miter-Bisector am Endpunkt, weil der für wackelnde
+  // Mittellinien (Handzeichnung) pro Reihe leicht unterschiedliche X-
+  // Verschiebungen ergibt — Resultat wäre ein sichtbarer Versatz zwischen
+  // den Reihen. Mit reiner Translation haben alle Reihen exakt dieselbe
+  // Form, nur um den Offset-Vektor verschoben.
   function offsetPolyline(stitches, offsetMm, axisOverride) {
     if (offsetMm === 0 || !stitches || stitches.length < 2) {
       return stitches ? stitches.map((s) => ({ ...s })) : [];
     }
-    const n = stitches.length;
-    const out = new Array(n);
-    for (let i = 0; i < n; i++) {
+    const axis = axisOverride || computeParallelAxis(stitches);
+    if (!axis) return stitches.map((s) => ({ ...s }));
+    const perpX = -axis.y, perpY = axis.x;
+    const shiftX = perpX * offsetMm;
+    const shiftY = perpY * offsetMm;
+    const out = new Array(stitches.length);
+    for (let i = 0; i < stitches.length; i++) {
       const s = stitches[i];
-      let nx, ny;
-      if (i === 0) {
-        const dx = stitches[1].xMm - s.xMm;
-        const dy = stitches[1].yMm - s.yMm;
-        const len = Math.hypot(dx, dy) || 1;
-        nx = -dy / len; ny = dx / len;
-        out[i] = { xMm: s.xMm + nx * offsetMm, yMm: s.yMm + ny * offsetMm, type: s.type };
-      } else if (i === n - 1) {
-        const dx = s.xMm - stitches[i - 1].xMm;
-        const dy = s.yMm - stitches[i - 1].yMm;
-        const len = Math.hypot(dx, dy) || 1;
-        nx = -dy / len; ny = dx / len;
-        out[i] = { xMm: s.xMm + nx * offsetMm, yMm: s.yMm + ny * offsetMm, type: s.type };
-      } else {
-        const dxA = s.xMm - stitches[i - 1].xMm;
-        const dyA = s.yMm - stitches[i - 1].yMm;
-        const lenA = Math.hypot(dxA, dyA) || 1;
-        const nxA = -dyA / lenA, nyA = dxA / lenA;
-        const dxB = stitches[i + 1].xMm - s.xMm;
-        const dyB = stitches[i + 1].yMm - s.yMm;
-        const lenB = Math.hypot(dxB, dyB) || 1;
-        const nxB = -dyB / lenB, nyB = dxB / lenB;
-        let bx = nxA + nxB, by = nyA + nyB;
-        const bl = Math.hypot(bx, by);
-        if (bl < 0.01) {
-          out[i] = { xMm: s.xMm + nxA * offsetMm, yMm: s.yMm + nyA * offsetMm, type: s.type };
-        } else {
-          bx /= bl; by /= bl;
-          let cosHalf = bx * nxA + by * nyA;
-          if (Math.abs(cosHalf) < 0.15) cosHalf = 0.15 * (cosHalf < 0 ? -1 : 1);
-          let miter = offsetMm / cosHalf;
-          const maxMiter = Math.abs(offsetMm) * 1.5;
-          if (Math.abs(miter) > maxMiter) miter = maxMiter * (miter < 0 ? -1 : 1);
-          out[i] = { xMm: s.xMm + bx * miter, yMm: s.yMm + by * miter, type: s.type };
-        }
-      }
+      out[i] = { xMm: s.xMm + shiftX, yMm: s.yMm + shiftY, type: s.type };
     }
     return out;
   }
